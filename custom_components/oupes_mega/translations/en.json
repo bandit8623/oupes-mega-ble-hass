@@ -1,0 +1,44 @@
+{
+  "options": {
+    "step": {
+      "init": {
+        "title": "OUPES Mega Options",
+        "data": {
+          "continuous_connection": "Continuous BLE connection",
+          "debug_attr_logging": "Debug: log all attribute values to CSV",
+          "debug_raw_logging": "Debug: log raw BLE packets to CSV"
+        },
+        "data_description": {
+          "continuous_connection": "Keep the Bluetooth connection open permanently instead of polling every 30 seconds. Captures infrequent sensor updates (e.g. battery voltage) but blocks the official app from connecting at the same time.",
+          "debug_attr_logging": "Write all received attribute values (including unknown ones and attr-78 mystery values) to oupes_mega_<addr>_attrs.csv in your HA config folder. Emits warnings in the HA log for unrecognised attr-78 values.",
+          "debug_raw_logging": "Write every raw BLE notification payload as hex to oupes_mega_<addr>_raw.csv in your HA config folder. Useful for offline analysis with the debug_info scripts."
+        }
+      }
+    }
+  },
+  "config": {
+    "step": {
+      "user": {
+        "title": "OUPES Mega Power Station",
+        "description": "Enter the Bluetooth MAC address of your OUPES Mega device. The device advertises via BLE as **TT**. If a device was already found nearby it will be pre-filled below.",
+        "data": {
+          "address": "Bluetooth MAC Address",
+          "name": "Device Name"
+        },
+        "data_description": {
+          "address": "Example: 8C:D0:B2:A7:EC:AF"
+        }
+      },
+      "bluetooth_confirm": {
+        "title": "OUPES Mega Power Station",
+        "description": "Found **{name}** ({address}) nearby. Add it to Home Assistant?"
+      }
+    },
+    "abort": {
+      "already_configured": "This device is already configured."
+    },
+    "error": {
+      "invalid_address": "Invalid Bluetooth MAC address format. Use XX:XX:XX:XX:XX:XX."
+    }
+  }
+}
