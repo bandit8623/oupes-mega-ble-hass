@@ -98,6 +98,7 @@ class _DeviceSession:
         debug_telemetry: bool = False,
         connected_devices: dict[str, str] | None = None,
         topic_subscriptions: dict[str, list] | None = None,
+        last_seen_devices: dict[str, tuple[str, float]] | None = None,
     ) -> None:
         self._reader = reader
         self._writer = writer
@@ -109,6 +110,7 @@ class _DeviceSession:
         self._debug_telemetry = debug_telemetry
         self._connected_devices = connected_devices if connected_devices is not None else {}
         self._topic_subs: dict[str, list] = topic_subscriptions if topic_subscriptions is not None else {}
+        self._last_seen_devices = last_seen_devices if last_seen_devices is not None else {}
         self._device_id: str | None = None
         self._device_key: str | None = None
         self._peer = writer.get_extra_info("peername")
@@ -122,6 +124,16 @@ class _DeviceSession:
             return
         record["ts"] = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         record["peer"] = str(self._peer)
+        # Perform blocking file I/O in a thread to avoid blocking the event loop.
+        try:
+            loop = asyncio.get_running_loop()
+            loop.run_in_executor(None, self._debug_write_sync, record)
+        except RuntimeError:
+            # No running loop (unlikely) — fall back to synchronous write.
+            self._debug_write_sync(record)
+
+    def _debug_write_sync(self, record: dict) -> None:
+        """Synchronous helper that appends one JSON-lines record to the debug file."""
         try:
             with self._debug_file.open("a", encoding="utf-8") as fh:
                 fh.write(json.dumps(record) + "\n")
@@ -137,10 +149,58 @@ class _DeviceSession:
             _LOGGER.debug("OUPES WiFi proxy: send error to %s: %s", self._peer, exc)
 
     async def _poll_loop(self) -> None:
-        """Periodically send cmd=2 (read request) for each attribute group."""
+        """Keep the device streaming and periodically poll attribute groups.
+
+        The OUPES Mega only sends telemetry while it believes an active client
+        is watching.  The real app signals this via:
+          • cmd=is_online  — every ~5 s
+          • cmd=3 attr 84=1 — every ~10 s  (same as BLE KEEPALIVE_PKT)
+
+        We send both directly from the proxy server so the device always
+        streams, regardless of whether a coordinator client is connected.
+        Attr-group polling (cmd=2) runs on the slower _POLL_INTERVAL cadence.
+        """
+        _IS_ONLINE_INTERVAL = 5.0
+        _ATTR84_INTERVAL = 10.0
+
         await asyncio.sleep(2.0)  # brief settle after subscribe
+
+        last_is_online = time.monotonic() - _IS_ONLINE_INTERVAL   # fire immediately
+        last_attr84 = time.monotonic() - _ATTR84_INTERVAL         # fire immediately
+        last_poll = time.monotonic() - _POLL_INTERVAL             # fire immediately
+
         while True:
-            if self._device_id and self._device_key:
+            await asyncio.sleep(1.0)  # 1-second ticker
+
+            if not (self._device_id and self._device_key):
+                continue
+
+            now = time.monotonic()
+
+            # ── is_online keepalive ────────────────────────────────────────
+            if now - last_is_online >= _IS_ONLINE_INTERVAL:
+                self._send(f"cmd=is_online&device_id={self._device_id}")
+                last_is_online = now
+
+            # ── attr-84 keepalive (triggers continuous telemetry) ──────────
+            if now - last_attr84 >= _ATTR84_INTERVAL:
+                ka_msg = json.dumps({
+                    "msg": {"attr": [84], "data": {"84": 1}},
+                    "pv": 0,
+                    "cmd": 3,
+                    "sn": _ts_ms(),
+                }, separators=(",", ":"))
+                self._send(
+                    f"cmd=publish"
+                    f"&device_id={self._device_id}"
+                    f"&topic=control_{self._device_id}"
+                    f"&device_key={self._device_key}"
+                    f"&message={ka_msg}"
+                )
+                last_attr84 = now
+
+            # ── attr-group polling (every _POLL_INTERVAL seconds) ─────────
+            if now - last_poll >= _POLL_INTERVAL:
                 for attrs in _ATTR_GROUPS:
                     msg = json.dumps({
                         "msg": {"attr": attrs},
@@ -156,7 +216,7 @@ class _DeviceSession:
                         f"&message={msg}"
                     )
                     await asyncio.sleep(0.15)
-            await asyncio.sleep(_POLL_INTERVAL)
+                last_poll = time.monotonic()
 
     def _handle_line(self, line: str) -> None:
         """Dispatch one received line."""
@@ -224,6 +284,7 @@ class _DeviceSession:
             if from_field == "device" and device_id:
                 peer_host = self._peer[0] if self._peer else "unknown"
                 self._connected_devices[device_id] = peer_host
+                self._last_seen_devices.pop(device_id, None)  # clear grace-period entry
 
                 # Immediately notify the device that clients are listening.
                 # On the real cloud broker, the device gets this signal at
@@ -383,9 +444,10 @@ class _DeviceSession:
         finally:
             if self._poll_task and not self._poll_task.done():
                 self._poll_task.cancel()
-            # Deregister from connected devices.
+            # Deregister from connected devices; record last-seen for grace period.
             if self._device_id and self._device_id in self._connected_devices:
-                del self._connected_devices[self._device_id]
+                peer_ip = self._connected_devices.pop(self._device_id)
+                self._last_seen_devices[self._device_id] = (peer_ip, time.monotonic())
             # Unsubscribe from all topics.
             for topic in self._subscribed_topics:
                 subs = self._topic_subs.get(topic, [])
@@ -427,12 +489,32 @@ class OUPESWiFiProxyServer:
         self._server: asyncio.Server | None = None
         # Maps device_id -> peer IP for currently-connected devices.
         self._connected_devices: dict[str, str] = {}
+        # Maps device_id -> (peer_ip, disconnect_time) for recently-disconnected devices.
+        self._last_seen_devices: dict[str, tuple[str, float]] = {}
         # Maps topic -> list of sessions subscribed to that topic.
         self._topic_subscriptions: dict[str, list[_DeviceSession]] = {}
 
+    # Grace period (seconds) — device still reports online after disconnect.
+    ONLINE_GRACE_PERIOD = 300  # 5 minutes
+
     def is_device_online(self, device_id: str) -> bool:
-        """Return True if the device currently has an active TCP broker connection."""
-        return device_id in self._connected_devices
+        """Return True if the device is connected or was seen within the grace period."""
+        if device_id in self._connected_devices:
+            return True
+        last = self._last_seen_devices.get(device_id)
+        if last and (time.monotonic() - last[1]) < self.ONLINE_GRACE_PERIOD:
+            return True
+        return False
+
+    def get_device_ip(self, device_id: str) -> str | None:
+        """Return the peer IP of a connected or recently-seen device."""
+        ip = self._connected_devices.get(device_id)
+        if ip:
+            return ip
+        last = self._last_seen_devices.get(device_id)
+        if last and (time.monotonic() - last[1]) < self.ONLINE_GRACE_PERIOD:
+            return last[0]
+        return None
 
     async def start(self) -> None:
         self._server = await asyncio.start_server(
@@ -465,5 +547,6 @@ class OUPESWiFiProxyServer:
             self._debug_file, self._debug_raw_lines, self._debug_telemetry,
             self._connected_devices,
             self._topic_subscriptions,
+            self._last_seen_devices,
         )
         await session.run()
