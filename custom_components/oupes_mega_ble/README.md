@@ -277,6 +277,27 @@ Changes take effect immediately — no restart required.
 
 ---
 
+## Re-pairing an Existing Device
+
+If a device stops responding because it lost its pairing (or you changed WiFi
+networks), you do **not** have to delete and re-add it. Use
+**Settings → Devices & Services → OUPES Power Station BLE → ⋮ → Reconfigure**
+on the entry. The MAC, name and current device key are pre-filled, and the
+entry keeps its identity — all entity IDs, history and dashboards survive.
+
+Two modes:
+
+| Mode | What it does | Device prep |
+|------|--------------|-------------|
+| *Re-run BLE pairing* **unchecked** + WiFi fields filled | Re-sends the stored device key plus WiFi credentials (AUTH sequence only) | None — device just needs to be on and in range |
+| *Re-run BLE pairing* **checked** | Runs the full claim sequence with the key shown, exactly like first-time setup | Hold the IoT button 5 s until rapid flashing, then press it once to re-enable the IoT module |
+
+Leave the pre-filled device key alone to re-claim as the same device. Change it
+only if you deliberately want to program a new key (for example to match the
+key used by the WiFi integration).
+
+---
+
 ## Troubleshooting
 
 | Symptom | Likely cause | Fix |

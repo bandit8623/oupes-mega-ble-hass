@@ -36,7 +36,7 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from .ble_pairing import PairingResult, async_pair_device
+from .ble_pairing import PairingResult, async_pair_device, async_provision_wifi
 from .cloud_api import async_cloud_login, async_fetch_device_key
 from .const import (
     ATTR78_RUNTIME_MAX,
@@ -151,6 +151,9 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._pairing_error: str | None = None
         self._wifi_ssid: str = ""
         self._wifi_psk: str = ""
+        self._reconfigure_repair: bool = False
+        self._reconfigure_task: asyncio.Task | None = None
+        self._reconfigure_new_data: dict[str, Any] = {}
 
     # ── Automatic bluetooth discovery ─────────────────────────────────────
 
@@ -532,6 +535,184 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "name": self._name,
                 "address": self._address,
             },
+        )
+
+    # ── Reconfigure / re-pair an existing entry ─────────────────────────────
+
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Re-pair or re-provision an already configured device.
+
+        Keeps the same config entry (and therefore all entity IDs and
+        history) while re-running the BLE claim sequence or just pushing
+        fresh WiFi credentials to the device.
+        """
+        entry = self._get_reconfigure_entry()
+        errors: dict[str, str] = {}
+
+        # Surface errors reported by the background pairing task.
+        if self._pairing_error:
+            errors["base"] = self._pairing_error
+            self._pairing_error = None
+
+        current_key = (
+            entry.options.get(CONF_DEVICE_KEY)
+            or entry.data.get(CONF_DEVICE_KEY)
+            or ""
+        )
+        current_address = entry.data.get(CONF_ADDRESS, "")
+        current_name = entry.data.get(CONF_NAME, "OUPES Mega")
+
+        if user_input is not None:
+            address = user_input.get(CONF_ADDRESS, "").upper().strip()
+            name = (user_input.get(CONF_NAME) or current_name).strip()
+            device_key = user_input.get(CONF_DEVICE_KEY, "").strip().lower()
+            repair = user_input.get("rerun_pairing", False)
+            ssid = user_input.get("wifi_ssid", "").strip()
+            psk = user_input.get("wifi_psk", "").strip()
+
+            parts = address.split(":")
+            if len(parts) != 6 or not all(len(p) == 2 for p in parts):
+                errors[CONF_ADDRESS] = "invalid_address"
+            elif address != current_address.upper():
+                # Guard against pointing this entry at an already configured MAC.
+                for other in self.hass.config_entries.async_entries(DOMAIN):
+                    if other.entry_id == entry.entry_id:
+                        continue
+                    if other.data.get(CONF_ADDRESS, "").upper() == address:
+                        errors[CONF_ADDRESS] = "already_configured_address"
+                        break
+
+            if not _valid_device_key(device_key):
+                errors[CONF_DEVICE_KEY] = "invalid_device_key"
+
+            if not errors:
+                self._address = address
+                self._name = name
+                self._pairing_key = device_key
+                self._wifi_ssid = ssid
+                self._wifi_psk = psk
+                self._reconfigure_repair = repair
+                # Re-detect the BLE identifiers if we never captured them.
+                device_id = entry.data.get(CONF_DEVICE_ID, "") or (
+                    _extract_device_id_for_address(self.hass, address) or ""
+                )
+                product_id = entry.data.get(CONF_PRODUCT_ID, "") or (
+                    _extract_product_id_for_address(self.hass, address) or ""
+                )
+                self._reconfigure_new_data = {
+                    **entry.data,
+                    CONF_ADDRESS: address,
+                    CONF_NAME: name,
+                    CONF_DEVICE_KEY: device_key,
+                    CONF_DEVICE_ID: device_id,
+                    CONF_PRODUCT_ID: product_id,
+                }
+
+                if repair or ssid:
+                    return await self.async_step_reconfigure_pairing()
+                return await self.async_step_reconfigure_save()
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_NAME, default=current_name): str,
+                    vol.Required(CONF_ADDRESS, default=current_address): str,
+                    vol.Required(CONF_DEVICE_KEY, default=current_key): str,
+                    vol.Optional("rerun_pairing", default=False): bool,
+                    vol.Optional("wifi_ssid", default=self._wifi_ssid): str,
+                    vol.Optional("wifi_psk", default=self._wifi_psk): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
+                }
+            ),
+            description_placeholders={
+                "name": current_name,
+                "address": current_address,
+            },
+            errors=errors,
+        )
+
+    async def async_step_reconfigure_pairing(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Run re-pairing / WiFi provisioning in the background."""
+        if self._reconfigure_task is None:
+            kwargs = {
+                "hass": self.hass,
+                "address": self._address,
+                "device_key": self._pairing_key,
+            }
+            if self._reconfigure_repair:
+                # Full claim sequence — device must be in pairing mode.
+                if self._wifi_ssid:
+                    kwargs["ssid"] = self._wifi_ssid
+                    kwargs["psk"] = self._wifi_psk
+                coro = async_pair_device(**kwargs)
+            else:
+                # Soft re-provision — no factory reset, just new credentials.
+                kwargs["ssid"] = self._wifi_ssid
+                kwargs["psk"] = self._wifi_psk
+                coro = async_provision_wifi(**kwargs)
+            self._reconfigure_task = self.hass.async_create_task(coro)
+
+        if not self._reconfigure_task.done():
+            return self.async_show_progress(
+                step_id="reconfigure_pairing",
+                progress_action=(
+                    "pairing" if self._reconfigure_repair else "provisioning_wifi"
+                ),
+                progress_task=self._reconfigure_task,
+                description_placeholders={
+                    "name": self._name,
+                    "address": self._address,
+                },
+            )
+
+        try:
+            result = self._reconfigure_task.result()
+        except Exception:  # noqa: BLE001
+            _LOGGER.exception(
+                "Unexpected error while re-pairing OUPES Mega %s", self._address
+            )
+            result = PairingResult.CONNECTION_FAILED
+        finally:
+            self._reconfigure_task = None
+
+        if result == PairingResult.SUCCESS:
+            return self.async_show_progress_done(next_step_id="reconfigure_save")
+
+        if result == PairingResult.DEVICE_NOT_FOUND:
+            self._pairing_error = "pairing_device_not_found"
+        elif result == PairingResult.CONNECTION_FAILED:
+            self._pairing_error = "pairing_connection_failed"
+        else:
+            self._pairing_error = "pairing_timeout"
+
+        return self.async_show_progress_done(next_step_id="reconfigure")
+
+    async def async_step_reconfigure_save(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Persist the reconfigured device data and reload the entry."""
+        entry = self._get_reconfigure_entry()
+        data = self._reconfigure_new_data or dict(entry.data)
+
+        # The device key may also live in options, where it takes priority
+        # over entry.data — keep the two in sync so the new key is used.
+        options = dict(entry.options)
+        if CONF_DEVICE_KEY in options:
+            options[CONF_DEVICE_KEY] = data[CONF_DEVICE_KEY]
+
+        return self.async_update_reload_and_abort(
+            entry,
+            unique_id=data[CONF_ADDRESS],
+            title=data.get(CONF_NAME) or entry.title,
+            data=data,
+            options=options,
+            reason="reconfigure_successful",
         )
 
 
