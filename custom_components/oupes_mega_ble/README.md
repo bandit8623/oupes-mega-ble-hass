@@ -72,6 +72,30 @@ Both come from the same cloud API the official app uses
 They must belong to the account the station is currently bound to, and changing
 either one means re-pairing the station.
 
+#### Where to enter them — order matters
+
+These two fields live in the integration's **options**, not in the setup flow, so
+the dialog that holds them does not exist until the station has been added. In
+order:
+
+1. Install this build and **restart Home Assistant**.
+2. Add the station as usual — accept the Bluetooth discovery card (or add it
+   manually), then work through **Choose pairing method** (existing key / create
+   key / cloud login) and **Connection settings**. On a Guardian this entry will
+   connect and then drop after about four seconds; that is expected, not a range
+   problem.
+3. Open **Settings → Devices & Services**, find the **OUPES Guardian 6000 V2 BLE**
+   entry, and press **Configure** (the gear icon on the integration card). The
+   dialog is titled *OUPES Options — Guardian 6000 V2 build*.
+4. Fill in **Cloud openId (Guardian / D5 V2 only)** and **Cloud userId (Guardian /
+   D5 V2 only)**, then **Submit**. Telemetry normally populates within about twenty
+   seconds, on the next poll after the options are saved.
+
+`userId` is stored as a number, so a zero-prefixed value will not match what the
+station holds, and both fields must come from the account the station is bound to.
+If they are missing, the log carries a warning at startup naming the integration
+options dialog.
+
 
 ### USB Bluetooth adapter for HA
 

@@ -87,11 +87,17 @@ device over BLE and exposes sensors, switches, and settings entities.
 3. Enter `https://github.com/bandit8623/oupes-mega-ble-hass`.
 4. Select **Integration**, click **Add**, and install **OUPES Guardian 6000 V2 BLE**.
 5. Restart Home Assistant — required, HACS only swaps the files on disk.
-6. **Guardian / D5 V2 stations only:** go to **Settings → Devices & Services →
-   OUPES Guardian 6000 V2 BLE → Configure** and enter your **openId** and
-   **userId** ([how to find them](custom_components/oupes_mega_ble/README.md#finding-your-openid-and-userid)).
-   Without them the station rejects AUTH and drops Bluetooth about four seconds
-   after each connect.
+6. Add the station: accept the Bluetooth discovery card (or add it manually), then
+   follow **Choose pairing method** and **Connection settings**. A Guardian / D5 V2
+   will connect and drop again after about four seconds at this point; that is
+   expected, and the next step is why.
+7. **Guardian / D5 V2 stations only:** with the entry now added, go to
+   **Settings → Devices & Services → OUPES Guardian 6000 V2 BLE → Configure** (the
+   gear icon) and fill in **Cloud openId** and **Cloud userId**
+   ([how to find them](custom_components/oupes_mega_ble/README.md#finding-your-openid-and-userid)).
+   These fields exist only in the options dialog, so this step has to come after
+   step 6 — there is nothing to fill in until the entry exists. Telemetry normally
+   appears within ~20 s of saving. Mega / Exodus / LP users skip this step.
 
 Releases are tagged, so HACS installs a specific version rather than a moving
 branch. Installing over an existing copy of this integration is fine — the domain
