@@ -158,23 +158,45 @@ advertises the BLE name `WP`. A **Mega** advertises `TT`.
 These stations put the owner's `openId` and numeric `userId` *inside* the
 Bluetooth authentication frame. Without them the station answers the AUTH packet
 and then drops Bluetooth about four seconds later, which looks exactly like a
-range problem. You get those two values one of three ways:
+range problem.
 
-| Your situation | Do this |
-| --- | --- |
-| Fresh or factory-reset station, you want Home Assistant only, no vendor cloud | **Claim with a local identity — no cloud account.** Home Assistant mints the identity and the key itself. Needs no account, no password, no internet. |
-| Station is already added to the Cleanergy app and you want the app to keep working | **Fetch key from Cleanergy cloud account.** One-time sign-in recovers the key *and* the identity. Credentials are never stored (see [security](SECURITY.md)); the vendor API is plain HTTP. |
-| Vendor cloud unreachable, station bound to someone else's account, or you simply refuse to give this integration your password | **Enter an existing device key**, then type `openId` and `userId` yourself. |
+**There is no account-free way to set one up, and that is the device's doing, not
+this integration's.** The identity comes from the vendor cloud and the station
+recognises it. Measured on a Guardian 6000 V2: factory reset twice, each followed
+immediately by a claim carrying a locally generated but correctly shaped identity,
+confirmed present in the AUTH frame — both timed out with the claim uncompleted,
+while the same frame carrying the real identity is accepted by the same station.
+The identity is the only variable that changed. Setting one of these up without
+the vendor would mean reversing whatever the station checks, which nobody has
+done.
 
-Then: power on, put the station in pairing mode (**hold IoT 5 s until it flashes
-rapidly**), and let HA auto-discover it. Only one Bluetooth client can be
-attached at a time, so keep the phone app closed during setup.
+So the order of operations is fixed by the hardware, not by preference:
 
-A locally claimed station is deliberately **absent from every vendor cloud
-account**, and if the official app binds it afterwards the app overwrites the
-identity — undoing the local claim needs another factory reset. The setup screen
-says this before it writes anything, and **Options** tells you which kind of
-identity a station carries.
+1. **Power on** the station; the IoT indicator should be lit.
+2. **Add it in the Cleanergy app first.** That is what binds the station to an
+   account and installs the identity Home Assistant needs. Skip if it is already
+   in the app.
+3. **Switch the phone's Bluetooth off** — or force-close the app and walk out of
+   range. One Bluetooth client at a time, and an app that is still holding the
+   station produces a pairing failure that looks like a broken integration.
+4. In Home Assistant: **Settings → Devices & Services → Add Integration → OUPES**,
+   pick the entry advertising **`WP`**, then **Fetch key from Cleanergy cloud
+   account** and sign in. Expect it to recover the identity and then **generate
+   its own device key**: on this firmware family the cloud record holds the
+   placeholder `WP` where a key should be, and a placeholder is not usable over
+   Bluetooth.
+5. Understand what step 4 costs: **Home Assistant's claim overwrites the key the
+   app wrote**, so Cleanergy stops reporting the station until you re-add it.
+   That is the price of taking the pairing over, not a malfunction.
+
+Would rather not hand this integration your password? Pick **Enter an existing
+device key** instead and type the `openId` and `userId` yourself — but the app
+still has to have bound the station first, and the two values still have to come
+from somewhere that knows them.
+
+If the station is brand new and you would rather never install the app: you
+cannot. Let it bind once, let Home Assistant take the pairing over, and the app
+can go away afterwards.
 
 ### Mega (`TT`) — no identity needed
 

@@ -217,6 +217,10 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._pairing_key: str | None = None
         self._pairing_task: asyncio.Task | None = None
         self._pairing_error: str | None = None
+        # Where a failed pairing hands the user back. Hard-coding create_key made a
+        # failure from any other method appear on a form with a different title and
+        # instructions that did not describe what had just been attempted.
+        self._pairing_return_step: str = "create_key"
         self._wifi_ssid: str = ""
         self._wifi_psk: str = ""
         self._reconfigure_repair: bool = False
@@ -341,21 +345,39 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if method == KEY_METHOD_LOCAL:
                 return await self.async_step_local_claim()
 
+        # Order is guidance, and it used to be actively wrong. On the WP family the
+        # vendor cloud is the only source of the account identity the station insists
+        # on, so leading with "Create a new device key" put the one option that cannot
+        # finish on its own in front of the one that can.
+        #
+        # "Claim with a local identity" is not offered. It was measured on a
+        # Guardian 6000 V2 on 2026-10-14: two factory resets, minted identity present
+        # in the AUTH frame, both attempts timed out, while the same frame with the
+        # real identity is accepted. A blank station does not accept any identity, so
+        # the option would only cost someone a factory reset.
+        guardian = _is_guardian_series(self._advertised_name, self._product_id)
+        methods = (
+            {
+                KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
+                KEY_METHOD_EXISTING: "Enter an existing device key",
+                KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
+            }
+            if guardian
+            else {
+                KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
+                KEY_METHOD_EXISTING: "Enter an existing device key",
+                KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
+            }
+        )
+
         return self.async_show_form(
             step_id="choose_method",
             data_schema=vol.Schema(
                 {
-                    vol.Required("key_method", default=KEY_METHOD_CREATE): vol.In(
-                        {
-                            KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
-                            KEY_METHOD_EXISTING: "Enter an existing device key",
-                            KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
-                            KEY_METHOD_LOCAL: (
-                                "Claim with a local identity - no cloud account "
-                                "(factory-reset station)"
-                            ),
-                        }
-                    ),
+                    vol.Required(
+                        "key_method",
+                        default=KEY_METHOD_CLOUD if guardian else KEY_METHOD_CREATE,
+                    ): vol.In(methods)
                 }
             ),
             description_placeholders={
@@ -432,18 +454,25 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     ) -> FlowResult:
         """Write a locally generated identity and key into a blank station.
 
-        A Guardian / D5 V2 needs an account identity in its AUTH frame, and the
-        vendor cloud is normally where that comes from. A factory-reset station
-        has no identity stored yet - which is how the phone app is able to bind
-        it in the first place - so this integration can write its own and never
-        contact the vendor: no account, no password, no internet.
+        NO LONGER OFFERED IN THE METHOD PICKER - measured, not guessed.
 
-        The trade-off is stated on the form rather than hidden, because it is
-        not reversible from Home Assistant: the minted identity cannot be looked
-        up in the vendor cloud, and the official app will overwrite it if it
-        binds the station afterwards.
+        The premise was that a factory-reset station has no identity stored and so
+        must accept any well-formed one, since that is how the phone app binds it.
+        On a Guardian 6000 V2 on 2026-10-14 that was wrong: two factory resets, each
+        followed immediately by this path with the minted identity confirmed present
+        in the AUTH frame, both timed out with the claim uncompleted. The same frame
+        carrying the real cloud identity is accepted by the same station, so the
+        single variable - the identity - is what the station checks.
+
+        Kept for the day someone works out what makes an openId acceptable, since
+        everything around it (threading identity into pairing, the encoder, the
+        tests) is otherwise finished and passing. Do not re-offer it until a real
+        station says yes.
         """
         errors: dict[str, str] = {}
+        if self._pairing_error:
+            errors["base"] = self._pairing_error
+            self._pairing_error = None
         if user_input is not None:
             if user_input.get("go_back"):
                 return await self.async_step_choose_method()
@@ -452,6 +481,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             else:
                 self._identity_open_id, self._identity_user_id = minted_identity()
                 self._identity_source = IDENTITY_SOURCE_LOCAL
+                self._pairing_return_step = "local_claim"
                 if not self._pairing_key:
                     self._pairing_key = _generate_device_key()
                 _LOGGER.info(
@@ -534,7 +564,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             self._pairing_error = "pairing_timeout"
 
         return self.async_show_progress_done(
-            next_step_id="create_key"
+            next_step_id=self._pairing_return_step
         )
 
     async def async_step_pairing_complete(
