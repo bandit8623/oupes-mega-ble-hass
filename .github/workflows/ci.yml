@@ -26,15 +26,12 @@ jobs:
       - name: pytest
         run: pytest -q
 
-      # The suite is deliberately dependency-free so it also runs without pytest:
-      #   python tests/test_protocol_wp.py
-      #   python tests/test_cloud_identity.py
-      #   python tests/test_local_identity.py
+      # The suite is deliberately dependency-free so it also runs without pytest.
+      # Every test_*.py is executed, so a new file cannot be added to pytest and
+      # quietly left out of the standalone path.
       - name: Standalone runner
         run: |
-          python tests/test_protocol_wp.py
-          python tests/test_cloud_identity.py
-          python tests/test_local_identity.py
+          for f in tests/test_*.py; do echo "== $f"; python "$f" || exit 1; done
 
   metadata:
     name: Integration metadata
