@@ -164,6 +164,53 @@ def _parse_account_number(raw: Any) -> int:
     return int(number) if number == int(number) else 0
 
 
+def resolve_key_on_account_change(
+    previous_uid: int,
+    stored_key: str,
+    typed_key: str,
+    new_uid: int,
+) -> str:
+    """Which device key to persist when the options form is submitted.
+
+    The rule that matters: a key the integration **derived** is a function of the
+    account number, so if the account number changes and the key box is left alone,
+    carrying the old key over would make the station refuse the frame - it compares
+    against the stored ``(account number, key)`` pair the vendor app wrote, so a new
+    account number paired with a stale key reads as "re-pairing failed" when all that
+    happened is a field nobody looked at kept its old value.
+
+    A key the user **typed** is not a function of anything, so it always wins, and a
+    stored key that is not ``md5(previous account number)`` is treated as captured or
+    hand-entered and is left alone rather than silently overwritten.
+
+    Returns the key to store; an empty result means "nothing to store".
+    """
+    typed = (typed_key or "").strip()
+    if typed:
+        return typed
+
+    stored = (stored_key or "").strip()
+    new_uid = int(new_uid or 0)
+    previous_uid = int(previous_uid or 0)
+
+    if not new_uid or new_uid == previous_uid:
+        # Account number unchanged, or none supplied: nothing here implies the key moved.
+        return stored
+
+    if not previous_uid:
+        # There is no previous hash to compare against, so the stored key's provenance
+        # is unknown and overwriting it would be a guess. With no stored key at all
+        # there is nothing to guess about, and a derived key beats an empty one.
+        return stored or derive_device_key(new_uid)
+
+    derived_for_previous = derive_device_key(previous_uid)
+    if stored and stored != derived_for_previous:
+        # Not ours - it came from a capture or the cloud. Never overwrite it.
+        return stored
+
+    return derive_device_key(new_uid)
+
+
 def _is_guardian_series(local_name: str | None, product_id: str | None) -> bool:
     """True when the station belongs to the Guardian / D5 V2 ("WP") family.
 
@@ -1272,7 +1319,17 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                 # persisted by accident. Anything absent from this list is simply
                 # not stored.
                 opts = dict(self._entry.options)
-                opts[CONF_DEVICE_KEY] = raw_key or current_key
+                previous_uid = int(
+                    self._entry.options.get(CONF_USER_ID)
+                    or self._entry.data.get(CONF_USER_ID)
+                    or 0
+                )
+                opts[CONF_DEVICE_KEY] = resolve_key_on_account_change(
+                    previous_uid=previous_uid,
+                    stored_key=current_key,
+                    typed_key=raw_key,
+                    new_uid=raw_user_id,
+                )
                 opts[CONF_OPEN_ID] = raw_open_id
                 opts[CONF_USER_ID] = raw_user_id
                 # Keep provenance honest. A cloud lookup overwrites both values so
