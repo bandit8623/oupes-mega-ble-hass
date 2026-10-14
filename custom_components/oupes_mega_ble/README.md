@@ -166,10 +166,13 @@ catalog. Add it as a custom repository:
 4. Select **Integration**, click **Add**, and install **OUPES Mega BLE**.
 5. Restart Home Assistant.
 
-HACS installs the BLE integration from `custom_components/oupes_mega_ble/`.
-The WiFi integration lives in its own repository,
-[acalcutt/oupes-mega-wifi-hass](https://github.com/acalcutt/oupes-mega-wifi-hass),
-and is installed separately.
+HACS installs the BLE integration from `custom_components/oupes_mega_ble/`. A
+separate WiFi integration exists upstream
+([acalcutt/oupes-mega-wifi-hass](https://github.com/acalcutt/oupes-mega-wifi-hass))
+for the older models, but **it does not work on Guardian / D5 V2 / D5 6000 Plus
+(`WP`) stations** — there is no local network protocol on that firmware, so
+Bluetooth is the only transport. If your station is out of range of your
+Bluetooth proxy, add a proxy nearer to it rather than reaching for WiFi.
 
 ---
 
@@ -407,9 +410,14 @@ Two modes:
 | *Re-run BLE pairing* **unchecked** + WiFi fields filled | Re-sends the stored device key plus WiFi credentials (AUTH sequence only) | None — device just needs to be on and in range |
 | *Re-run BLE pairing* **checked** | Runs the full claim sequence with the key shown, exactly like first-time setup | Hold the IoT button 5 s until rapid flashing, then press it once to re-enable the IoT module |
 
+> **On Guardian / D5 V2 (`WP`) stations only the second row exists.** These units
+> will not accept WiFi credentials over Bluetooth: the AUTH frame that carries them
+> is not the frame these stations authenticate with, so the first row is refused by
+> the form with an explanation rather than being attempted and timing out. Use
+> *Re-run BLE pairing* to repair the connection.
+
 Leave the pre-filled device key alone to re-claim as the same device. Change it
-only if you deliberately want to program a new key (for example to match the
-key used by the WiFi integration).
+only if you deliberately want to program a new key.
 
 ---
 

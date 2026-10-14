@@ -22,12 +22,20 @@ required. This build is maintained and tested against the
 > upstream pull request; if that merges, this fork becomes redundant and the
 > upstream repo should be preferred.
 
-> The **WiFi** integration lives in its own repository:
-> [acalcutt/oupes-mega-wifi-hass](https://github.com/acalcutt/oupes-mega-wifi-hass).
-> HACS requires one integration per repository, so the two halves of that
-> project were split. The BLE and WiFi integrations can still run side by side —
-> they use independent communication channels and create separate device and
-> entity sets.
+> **WiFi does not work on Guardian / D5 V2 / D5 6000 Plus stations.** A separate
+> [WiFi integration](https://github.com/acalcutt/oupes-mega-wifi-hass) exists - HACS
+> requires one integration per repository, so the two halves of that project were
+> split - but on the `WP` firmware family these units have no usable network data
+> path. Reported by the vendor's own app developer, and confirmed here in practice:
+> the station will not carry local telemetry over WiFi by any route, and the vendor
+> cloud (plain HTTP, no local API) is the only thing it speaks to on the network.
+> **Bluetooth, relayed by an [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy),
+> is the supported path** - it is what this page is for, and it is how every figure
+> on this page was obtained. Do not lose an afternoon to the WiFi option.
+>
+> The `wifi_ssid` / `wifi_psk` fields during setup are not a workaround either: they
+> only hand your credentials to the station so the vendor app and cloud can reach
+> it. Home Assistant still talks to the station over Bluetooth afterwards.
 
 ---
 
@@ -182,22 +190,28 @@ and either fetch the values from your cloud account or enter them.
 
 ---
 
-## BLE or WiFi?
+### WiFi: not an option on these models
 
-| Scenario | Install |
-|----------|---------|
-| Simple local-only setup, device within BLE range | this integration |
-| Device too far for BLE, or you want push telemetry | [oupes-mega-wifi-hass](https://github.com/acalcutt/oupes-mega-wifi-hass) |
-| Want both channels for redundancy | both |
+The upstream project offers a companion
+[WiFi integration](https://github.com/acalcutt/oupes-mega-wifi-hass), and for the
+older `TT` models it is the better choice at distance: push-based, real-time, and
+range-free. **It does not work on Guardian / D5 V2 / D5 6000 Plus (`WP`) stations.**
 
-**BLE is the easiest path.** It works entirely over Bluetooth with zero network
-configuration — no firewall rules, no port forwarding, no DNS tricks.
+Do not try to reach them over WiFi, and do not troubleshoot it:
 
-**WiFi requires network-level redirection.** The device firmware hardcodes the
-cloud broker IP (`47.252.10.9`), so NAT rules are needed to intercept the
-device's outbound connections and redirect them to your HA instance. More
-powerful (push-based, real-time, works at any distance) but a more involved
-setup.
+- the unit exposes no local network protocol on this firmware — the vendor's own
+  app developer says so, and hands-on testing here agrees
+- the firmware talks to a hardcoded vendor cloud over **plain HTTP**, which is not
+  a local API and not something to proxy into your LAN
+- the `wifi_ssid` / `wifi_psk` fields in setup configure the *station's* connection
+  for the vendor app. They do not connect Home Assistant to the station, and
+  nothing breaks if you leave them blank
+
+If the station is out of Bluetooth range, the fix is a second
+[ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy) nearer to
+it - an ESP32 on the desk next to the station costs less than the cable you would
+need for any wired alternative, and this integration uses whichever proxy can hear
+the station. **BLE is the only path**, so that is the one to make reliable.
 
 ---
 

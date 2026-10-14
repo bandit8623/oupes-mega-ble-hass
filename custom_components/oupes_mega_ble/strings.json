@@ -67,7 +67,7 @@
       },
       "create_key": {
         "title": "Create New Device Key",
-        "description": "This will pair **{name}** ({address}) with a new device key over Bluetooth.\n\n**Before clicking Submit:**\n1. Press and hold the **IoT button** on the device for **5 seconds**\n2. Wait until the indicator light **flashes rapidly** (factory reset complete)\n3. The IoT module (Wi-Fi/BLE) will turn off — **press the IoT button once to turn it back on**\n4. The device is now in pairing mode\n\nA random key has been generated below. You can change it or leave the default. Pairing takes about 20 seconds.\n\n**WiFi credentials (optional):** If you want the device to connect to your WiFi network after pairing, enter your 2.4 GHz network name and password below.",
+        "description": "This will pair **{name}** ({address}) with a new device key over Bluetooth.\n\n**Before clicking Submit:**\n1. Press and hold the **IoT button** on the device for **5 seconds**\n2. Wait until the indicator light **flashes rapidly** (factory reset complete)\n3. The IoT module (Wi-Fi/BLE) will turn off — **press the IoT button once to turn it back on**\n4. The device is now in pairing mode\n\nA random key has been generated below. You can change it or leave the default. Pairing takes about 20 seconds.\n\n**WiFi credentials:** these are only used to hand your network to the device so the **vendor app and cloud** can reach it. Home Assistant talks to the device over Bluetooth either way, so leaving both fields blank is the normal choice - and Guardian / D5 V2 devices do not accept them at all.",
         "data": {
           "device_key": "Device Key (10 hex characters)",
           "wifi_ssid": "WiFi Network Name (SSID)",
@@ -76,9 +76,12 @@
         },
         "data_description": {
           "device_key": "A random key has been pre-filled. You can keep it or enter your own 10-character hex key.",
-          "wifi_ssid": "Optional. The name of your 2.4 GHz WiFi network. Leave blank to skip WiFi provisioning.",
-          "wifi_psk": "Optional. The password for your WiFi network.",
+          "wifi_ssid": "Only used to hand your network to the station so the **vendor app and cloud** can reach it. Home Assistant keeps using Bluetooth afterwards, so leaving this blank costs you nothing. **Not available on Guardian / D5 V2 stations.**",
+          "wifi_psk": "Password for the network named above. Same caveat: it configures the station's own connection for the vendor app, not the connection Home Assistant uses.",
           "go_back": "Check this and click Submit to return to the method selection screen."
+        },
+        "errors": {
+          "wifi_unsupported_guardian": "Guardian / D5 V2 stations cannot be handed WiFi credentials. On this firmware the pairing frame that carries your account identity and the frame that carries a network name are two different packets, and the station only accepts the identity one - so filling this in is what breaks the pairing. Leave it blank: Home Assistant uses Bluetooth, and the station does not need WiFi to work."
         }
       },
       "existing_key": {
@@ -124,7 +127,7 @@
       },
       "reconfigure": {
         "title": "Re-pair / Reconfigure Device",
-        "description": "Re-pair **{name}** ({address}) without removing it from Home Assistant — all entity IDs and history are kept.\n\n**Just fixing the connection?** Leave *Re-run BLE pairing* unchecked and fill in your WiFi details. The stored device key and credentials are pushed to the device over Bluetooth without a factory reset.\n\n**Full re-pair?** Tick *Re-run BLE pairing* and put the device into pairing mode first:\n1. Press and hold the **IoT button** for **5 seconds**\n2. Wait until the indicator light **flashes rapidly** (factory reset complete)\n3. The IoT module (Wi-Fi/BLE) will turn off — **press the IoT button once to turn it back on**\n\nThe device is re-claimed with the key below, so it stays the same device to Home Assistant.",
+        "description": "Re-pair **{name}** ({address}) without removing it from Home Assistant — all entity IDs and history are kept.\n\n**Just re-sending credentials?** Leave *Re-run BLE pairing* unchecked and fill in your WiFi details: the stored device key and credentials are pushed over Bluetooth without a factory reset. Guardian / D5 V2 devices cannot take WiFi credentials this way, so on those, tick *Re-run BLE pairing* instead.\n\n**Full re-pair?** Tick *Re-run BLE pairing* and put the device into pairing mode first:\n1. Press and hold the **IoT button** for **5 seconds**\n2. Wait until the indicator light **flashes rapidly** (factory reset complete)\n3. The IoT module (Wi-Fi/BLE) will turn off — **press the IoT button once to turn it back on**\n\nThe device is re-claimed with the key below, so it stays the same device to Home Assistant.",
         "data": {
           "name": "Device Name",
           "address": "Bluetooth MAC Address",
@@ -138,8 +141,11 @@
           "address": "Example: 8C:D0:B2:A7:EC:AF. Only change this if the device's Bluetooth address actually changed.",
           "device_key": "The existing 10-character hex key is pre-filled. Keep it to re-pair as the same device; change it only if you want to program a new key.",
           "rerun_pairing": "Runs the full claim sequence (about 20 seconds). The device must be in pairing mode. Leave unchecked to only re-send credentials.",
-          "wifi_ssid": "Optional. The name of your 2.4 GHz WiFi network. Leave blank to skip WiFi provisioning.",
-          "wifi_psk": "Optional. The password for your WiFi network."
+          "wifi_ssid": "Only used to hand your network to the station so the **vendor app and cloud** can reach it. Home Assistant keeps using Bluetooth afterwards, so leaving this blank costs you nothing. **Not available on Guardian / D5 V2 stations.**",
+          "wifi_psk": "Password for the network named above. Same caveat: it configures the station's own connection for the vendor app, not the connection Home Assistant uses."
+        },
+        "errors": {
+          "wifi_unsupported_guardian": "WiFi credentials cannot be pushed to a Guardian / D5 V2 over Bluetooth. Tick *Re-run BLE pairing* to repair the connection, or clear the network name."
         }
       },
       "reconfigure_pairing": {

@@ -390,6 +390,19 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._pairing_key = new_key
                 self._wifi_ssid = user_input.get("wifi_ssid", "").strip()
                 self._wifi_psk = user_input.get("wifi_psk", "").strip()
+                # On this firmware family the identity frame and the WiFi frame are
+                # different packets, and only the identity one is accepted. Accepting
+                # an SSID here would therefore swap in a frame the station rejects,
+                # turning an optional field into a failed pairing. Reject it at the
+                # form, where the explanation is legible, instead of ~20 s of
+                # "Device did not respond to pairing" for a field marked optional.
+                if self._wifi_ssid and _is_guardian_series(
+                    self._advertised_name, self._product_id
+                ):
+                    self._wifi_ssid = self._wifi_psk = ""
+                    errors["wifi_ssid"] = "wifi_unsupported_guardian"
+
+            if not errors:
                 return await self._maybe_identity("pairing")
 
         suggested_key = self._pairing_key or _generate_device_key()
@@ -855,6 +868,14 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
             if not _valid_device_key(device_key):
                 errors[CONF_DEVICE_KEY] = "invalid_device_key"
+
+            if not errors:
+                # See the note in async_step_create_key: an SSID on a Guardian
+                # silently downgrades the AUTH frame to one the station drops.
+                if ssid and _is_guardian_series(
+                    entry.data.get(CONF_NAME, ""), entry.data.get(CONF_PRODUCT_ID)
+                ):
+                    errors["wifi_ssid"] = "wifi_unsupported_guardian"
 
             if not errors:
                 self._address = address

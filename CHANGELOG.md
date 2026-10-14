@@ -25,6 +25,20 @@ This fork tracks
   a real key, so the cloud method reported a login failure after a login that had
   worked. The identity is the half a Guardian cannot do without, and it *does* come
   back, so setup now continues with a locally generated key instead of stopping.
+- **"Optional" WiFi credentials broke Guardian pairings.** The pairing form offers
+  optional WiFi fields, marked "leave blank to skip". On `WP` firmware the frame that
+  carries WiFi settings and the frame that carries the account identity are different
+  packets, and the station only accepts the identity one, so anything typed into a
+  field labelled optional swapped in a frame the station answers and then drops - and
+  the pairing then fails with a timeout that does not mention WiFi anywhere. The form
+  now refuses that combination on Guardian / D5 V2 stations and says why, and the
+  field descriptions say what the values are actually for (the vendor app's
+  connection, never Home Assistant's).
+- **Documentation pointed new Guardian owners at a transport that cannot work here.**
+  The README recommended the companion WiFi integration for stations out of Bluetooth
+  range. On this firmware family there is no local network protocol at all, so that
+  advice sends the exact reader this fork exists for down a dead end. It now says the
+  opposite, with the reasoning, and points at an ESPHome Bluetooth proxy instead.
 - **Manual setup could not suggest a Guardian.** The manual add screen listed only
   stations advertising `TT`, so anyone adding a `WP` station by hand got an empty
   address field with no hint that the station was sitting right there in the
