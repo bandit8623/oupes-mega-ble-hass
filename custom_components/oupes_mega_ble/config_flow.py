@@ -63,12 +63,14 @@ from .const import (
     CONF_USER_ID,
     DOMAIN,
     IDENTITY_SOURCE_CLOUD,
+    IDENTITY_SOURCE_DERIVED,
     IDENTITY_SOURCE_LOCAL,
     IDENTITY_SOURCE_MANUAL,
     STALE_TIMEOUT,
     UPDATE_INTERVAL,
     series_from_product_id,
 )
+from .protocol import derive_device_key
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -78,6 +80,10 @@ KEY_METHOD_CREATE = "create_new_key"
 KEY_METHOD_EXISTING = "existing_key"
 KEY_METHOD_CLOUD = "cloud_login"
 KEY_METHOD_LOCAL = "local_claim"
+# Ask for the account number alone. The binding key is md5(account)[:10], so the
+# number is the whole credential on the WP family, which is why this needs no
+# cloud call, no capture and no WeChat openid.
+KEY_METHOD_ACCOUNT = "account_number"
 
 
 def _valid_device_key(key: str) -> bool:
@@ -120,6 +126,11 @@ def _identity_source_phrase(source: str) -> str:
         return "read from your OUPES / Cleanergy cloud account"
     if source == IDENTITY_SOURCE_MANUAL:
         return "typed in by hand"
+    if source == IDENTITY_SOURCE_DERIVED:
+        return (
+            "derived here from your Cleanergy account number, the same way the "
+            "vendor app derives it, so there is nothing to keep in sync"
+        )
     # Entries written before provenance was recorded: say nothing specific rather
     # than guess, because a wrong guess sends people hunting for a cloud binding
     # that was never there.
@@ -344,6 +355,8 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_cloud_login()
             if method == KEY_METHOD_LOCAL:
                 return await self.async_step_local_claim()
+            if method == KEY_METHOD_ACCOUNT:
+                return await self.async_step_account_number()
 
         # Order is guidance, and it used to be actively wrong. On the WP family the
         # vendor cloud is the only source of the account identity the station insists
@@ -358,6 +371,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         guardian = _is_guardian_series(self._advertised_name, self._product_id)
         methods = (
             {
+                KEY_METHOD_ACCOUNT: "Use my Cleanergy account number",
                 KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
                 KEY_METHOD_EXISTING: "Enter an existing device key",
                 KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
@@ -376,7 +390,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(
                         "key_method",
-                        default=KEY_METHOD_CLOUD if guardian else KEY_METHOD_CREATE,
+                        default=KEY_METHOD_ACCOUNT if guardian else KEY_METHOD_CREATE,
                     ): vol.In(methods)
                 }
             ),
@@ -573,6 +587,70 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Pairing succeeded - proceed to connection settings."""
         return await self.async_step_connection_settings()
 
+    # -- Method A2: Account number, key derived from it ---------------------
+
+    async def async_step_account_number(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Pair with nothing but the Cleanergy account number.
+
+        The binding key the vendor app writes is ``md5(account)[:10]``, so the
+        account number is the whole credential on this family and no capture,
+        cloud read or openid is involved. Measured on a Guardian 6000 V2: this
+        key with this userId is accepted and streams telemetry with the openId
+        field zero-filled, while a foreign userId is refused - the station
+        checks these two and ignores the third.
+
+        Only reachable for a station the account has already added in the app,
+        because that is what writes the pair into the station.
+        """
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            if user_input.get("go_back"):
+                return await self.async_step_choose_method()
+            try:
+                account = int(str(user_input.get(CONF_USER_ID, "")).strip())
+            except (TypeError, ValueError):
+                account = 0
+            if account <= 0:
+                errors[CONF_USER_ID] = "invalid_user_id"
+            elif not user_id_fits(account):
+                errors[CONF_USER_ID] = "invalid_user_id"
+            else:
+                self._identity_user_id = account
+                self._pairing_key = derive_device_key(account)
+                # Deliberately left empty. The station does not read this field,
+                # and inventing a plausible-looking one would be worse than
+                # leaving it blank: it would look like a real account link.
+                self._identity_open_id = ""
+                self._identity_source = IDENTITY_SOURCE_DERIVED
+                return await self.async_step_connection_settings()
+
+        return self.async_show_form(
+            step_id="account_number",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_USER_ID, default=self._identity_user_id or 0
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=1,
+                            max=USER_ID_MAX,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    ),
+                    vol.Optional("go_back", default=False): bool,
+                }
+            ),
+            description_placeholders={
+                "name": self._name,
+                "address": self._address,
+            },
+            errors=errors,
+        )
+
     # -- Method B: Enter existing key -------------------------------------
 
     async def async_step_existing_key(
@@ -641,20 +719,22 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     return await self._maybe_identity("connection_settings")
 
                 if identity is not None and identity.ok:
-                    # No usable key in the cloud record, which is normal on this
-                    # firmware family - the record stores the family tag ("WP")
-                    # in device_key instead of the real one. The identity came
-                    # back, and that is the part a Guardian cannot do without,
-                    # so carry on and let the integration write its own key over
-                    # BLE instead of failing the setup.
+                    # The cloud record stores the family tag ("WP") in device_key
+                    # instead of a real key on this firmware - measured on three
+                    # accounts, never a key. That used to mean falling back to a
+                    # BLE claim, which the station refuses. It does not need one:
+                    # the app writes md5(account)[:10] as the binding key, so the
+                    # account number the login just returned derives it, and the
+                    # station is already paired because the owner added it in the
+                    # app. Nothing is written to the station on this path.
+                    self._pairing_key = derive_device_key(int(identity.user_id))
+                    self._identity_source = IDENTITY_SOURCE_DERIVED
                     _LOGGER.info(
-                        "OUPES cloud returned no usable device_key for this "
-                        "station (the record carries %r), but the account "
-                        "identity was recovered - continuing with a key generated "
-                        "by this integration",
-                        "WP",
+                        "OUPES cloud carries no device_key for this station (the "
+                        "record holds the family tag), so the binding key was "
+                        "derived from the account number instead"
                     )
-                    return await self.async_step_create_key()
+                    return await self.async_step_connection_settings()
 
                 # Login worked but the station is not in that account, or the
                 # record has no identity. Say which, because the two need
@@ -694,7 +774,10 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         stations never need it, and a Guardian whose identity already came from
         the cloud does not have to be asked.
         """
-        if self._identity_open_id and self._identity_user_id:
+        # Only the userId. Measured on a Guardian 6000 V2: the station accepts
+        # the frame with the openId field zero-filled and streams telemetry, so
+        # asking for it blocks setups for a value the device never reads.
+        if self._identity_user_id:
             return False
         return _is_guardian_series(self._advertised_name, self._product_id)
 
@@ -725,9 +808,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             except (TypeError, ValueError):
                 user_id = -1
 
-            if not open_id:
-                errors[CONF_OPEN_ID] = "required"
-            elif not open_id_fits(open_id):
+            if not open_id_fits(open_id):
                 errors[CONF_OPEN_ID] = "invalid_open_id"
             if user_id <= 0:
                 errors[CONF_USER_ID] = "invalid_user_id"
@@ -744,7 +825,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             step_id="identity",
             data_schema=vol.Schema(
                 {
-                    vol.Required(CONF_OPEN_ID, default=self._identity_open_id): (
+                    vol.Optional(CONF_OPEN_ID, default=self._identity_open_id): (
                         TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
                     ),
                     vol.Required(

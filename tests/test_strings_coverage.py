@@ -82,6 +82,7 @@ def test_every_form_step_has_strings():
     rendered = {
         step
         for step in (
+            "account_number",
             "bluetooth_confirm",
             "choose_method",
             "cloud_login",

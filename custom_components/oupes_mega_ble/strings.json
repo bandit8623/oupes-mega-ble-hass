@@ -44,6 +44,16 @@
           "cloud_identity_no_open_id": "Signed in and found the station, but the vendor's records for it do not include the account identity (openId) this station needs in its Bluetooth authentication. The Home Assistant log names the fields that were present, which tells you whether the account lacks it or the vendor renamed it. You can still enter openId and userId yourself.",
           "cloud_identity_no_user_id": "Signed in and found the station, but the numeric account id (userId) could not be read from the response. Try again; if it keeps happening, enter openId and userId yourself instead."
         }
+      },
+      "account_number": {
+        "title": "Your Cleanergy Account Number",
+        "description": "Enter the account number **{name}** was added with in the Cleanergy app, and Home Assistant will derive the binding key from it.\n\nThe station was written with that number and a key generated from it when the app paired it, so this is the only value needed - no device key to capture, and no cloud lookup. It is the number the vendor's own app uses the same way.\n\nYou can leave the app installed but closed: the station answers one Bluetooth client at a time, and Home Assistant keeps that connection open continuously. Removing the station from the app would wipe the pairing and is not needed here.",
+        "data": {
+          "user_id": "Account number"
+        },
+        "errors": {
+          "invalid_user_id": "That is not a usable account number. It is the numeric id of the Cleanergy account the station was paired with - the vendor app shows it in the account screen, and a password login returns it as `uid`."
+        }
       }
     }
   },
@@ -88,6 +98,16 @@
         },
         "errors": {
           "wifi_unsupported_guardian": "Guardian / D5 V2 stations cannot be handed WiFi credentials. On this firmware the pairing frame that carries your account identity and the frame that carries a network name are two different packets, and the station only accepts the identity one - so filling this in is what breaks the pairing. Leave it blank: Home Assistant uses Bluetooth, and the station does not need WiFi to work."
+        }
+      },
+      "account_number": {
+        "title": "Your Cleanergy Account Number",
+        "description": "Enter the account number **{name}** was added with in the Cleanergy app, and Home Assistant will derive the binding key from it.\n\nThe station was written with that number and a key generated from it when the app paired it, so this is the only value needed - no device key to capture, and no cloud lookup. It is the number the vendor's own app uses the same way.\n\nYou can leave the app installed but closed: the station answers one Bluetooth client at a time, and Home Assistant keeps that connection open continuously. Removing the station from the app would wipe the pairing and is not needed here.",
+        "data": {
+          "user_id": "Account number"
+        },
+        "errors": {
+          "invalid_user_id": "That is not a usable account number. It is the numeric id of the Cleanergy account the station was paired with - the vendor app shows it in the account screen, and a password login returns it as `uid`."
         }
       },
       "existing_key": {
@@ -190,7 +210,7 @@
         "title": "Account identity",
         "description": "The {name} family (Guardian / D5 V2) puts your account identity inside the Bluetooth authentication frame, so the station cannot be used without it. Home Assistant could not recover it from your OUPES / Cleanergy cloud account, usually because the station is not currently added to that account. Easiest fix: go back, add the station in the Cleanergy app first, and fetch it automatically. Otherwise enter the two values below, read from the device record of the account the station belongs to.",
         "data": {
-          "open_id": "openId",
+          "open_id": "Open ID (optional, not checked by the station)",
           "user_id": "userId"
         },
         "data_description": {

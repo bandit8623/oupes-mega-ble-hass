@@ -26,30 +26,33 @@ The last row is the one people get caught by, so it is worth stating as a rule:
 
 ---
 
-## 2. The four values the pairing asks for
+## 2. What the pairing actually asks for
 
-| Value | Example shape | Where it comes from |
+Two values. That is all.
+
+| Value | Example | Where it comes from |
 | --- | --- | --- |
-| **Bluetooth address** | `AA:BB:CC:DD:EE:FF` | The station's own MAC. Easiest to get from your proxy's device list, or from the app's device page. |
-| **openId** | 28 characters, usually starting `o` | Your account's identity on the vendor cloud. See §3. |
-| **userId** | short decimal, e.g. `24680` | Your account id on the vendor cloud. See §3. |
-| **device key** | 10 hex characters | `md5(userId)` truncated to 10 characters — see §4. |
+| **Bluetooth address** | `AA:BB:CC:DD:EE:FF` | The station's own MAC. Your proxy's device list, or the app's device page. |
+| **Account number** | `24680` | Your Cleanergy account id. The app shows it in the account screen; a password login returns it as `uid` (see §3). |
 
-The station authenticates on the **device key**. openId and userId are sent in the
-same identity frame and are stored by the station, but the key is what makes it talk.
+The device key is not a third thing to hunt for. It is `md5(account number)`
+truncated to ten characters, which this integration computes for you (§4). The
+station was written with exactly that pair when the app paired it.
 
-One thing that has **not** been established: whether the station checks the openId it
-receives alongside the key. Every successful pairing so far used the account's real
-openId, so do not assume you can invent one. If you can test this on a spare unit, say
-so on the issue tracker - it decides whether first-time setup can ever be openId-free.
+**There is no openId requirement.** This was measured rather than assumed: a
+Guardian 6000 V2 received its real key and real account number with the openId
+field **zero-filled**, and answered with 43 telemetry frames. The same frame with
+the *account number* wrong was refused. So the station checks the key and the
+account number and ignores the openId completely.
 
----
+That is worth stating bluntly, because the openId is the value that made this
+station look un-supportable for months. It looks like a WeChat openid, it is
+returned by no email-and-password API, and it was never needed.
 
-## 3. Getting openId and userId
+## 3. Getting your account number
 
-### userId — from the vendor cloud API
-
-The same API the app uses:
+In the app: the account screen shows the account id. If you would rather read it
+from the vendor API than trust a screen, it is the same API the app uses:
 
 ```
 POST http://api.upspowerstation.top/api/app/user/login
@@ -59,44 +62,30 @@ Content-Type: application/json
  "lang": "en", "platform": "android", "systemVersion": 34}
 ```
 
-The response contains `info.uid` — that is the userId.
+The response carries it as `info.uid`. Three things about that call will
+otherwise cost you an hour:
 
-Notes that will save you an hour:
+* the password is sent as **plaintext**, not hashed;
+* the field is **`uid`**, not `userId`;
+* the endpoint is plain **HTTP**. There is no TLS. Do not run this from a network
+  you do not trust, and do not paste a response into a public issue.
 
-* The password is sent as **plaintext**, not hashed.
-* The field is **`uid`**, not `userId`.
-* The endpoint is plain **HTTP**. There is no TLS on this API. Do not run this from a
-  network you do not trust, and do not paste the response into a public issue.
+You normally never need to make this call. Home Assistant's **Use my Cleanergy
+account number** option asks for the number directly, and **Fetch key from your
+account** (§5) logs in and reads it for you.
 
-If you would rather not script it, `/api/app/user/login` is also what Home Assistant's
-**Fetch key from your account** option calls internally — but read §5 first: that
-option currently needs the openId to be present in the response, and for accounts that
-registered through WeChat it is not.
+### Why there used to be a second value here
 
-### openId — the awkward one
+Earlier revisions of this guide told you to find an `openId` as well, and warned
+that a WeChat-provisioned account would never yield one. Both statements were
+wrong in the way that matters: the advice was unnecessary and the blocker was
+imaginary. The value was carried forward from an old pairing into later
+experiments, always in the same frame as the two values that do get checked, so
+no test had ever been able to tell that it was decoration. It has now been
+removed from the frame and the station streams without it.
 
-`openId` is **not** returned by the email-and-password login on every account. On the
-account used to write this guide it appears nowhere in the login response, nowhere in
-`/device/list`, and nowhere in `/device/info` — searched recursively, including inside
-the stringified-JSON fields. Its shape (`o` followed by 27 base64-ish characters) is a
-**WeChat openid**, which is why it never appears in a password login: it belongs to a
-different authorisation path.
-
-What actually works today:
-
-1. **Ask the vendor.** Support provisions stations and can state which account a unit
-   is bound to.
-2. **Capture it from the app.** The app sends the openId to the station inside the
-   identity frame over Bluetooth. Capturing that needs a rooted phone or an ESP32 in
-   the middle; Android's own Bluetooth log on modern OEM builds is not usable.
-3. **Use an account that does return it.** If your login response does contain an
-   openId-shaped value, use it.
-
-Be careful reading this across the internet: the openId is your identity to the vendor
-cloud. Anyone holding it plus the station's key can bind the station to their own
-app. Treat it like a password, and never commit a real one to a public repository.
-
----
+If your entry already has an openId stored, leave it: the station ignores it
+either way.
 
 ## 4. The device key
 
@@ -134,23 +123,33 @@ Practical consequences:
 
 ## 5. Which pairing screen to use
 
-**Settings → Devices & Services → Add Connection → OUPES Mega BLE → Specify manually
-→ Other / already-paired device → Enter an existing device key.**
+**Settings → Devices & Services → Add Connection → OUPES Mega BLE → Specify
+manually → Other / already-paired device → Use my Cleanergy account number.**
 
-Fill in the four values from §2. Leave WiFi alone: these stations have no WiFi
-integration path, and any text in the SSID field silently switches the frame format to
-one the Guardian rejects outright.
+Enter the Bluetooth address and the account number from §2. The key is derived
+from the number, and nothing is written to the station: the app already left the
+matching pair there.
 
 The other options on that screen, honestly described:
 
-* **Create a new device key** — takes the station back from the app by claiming it with
-  your own identity. Requires the station to be genuinely unbound. See §7 for how to
-  tell, and why it is harder than the button on the side of the unit suggests.
-* **Fetch key from your account** — needs the openId to be present in the cloud
-  response. For WeChat-provisioned accounts it is not, and the flow says so rather
-  than pretending the account is empty.
+* **Fetch key from your account** — same result, fewer things to look up. It logs
+  in with your email and password, reads your account number out of the login
+  response and derives the key. It needs the station to be in that account's
+  device list. Your password is used once and is never written to disk.
+* **Enter an existing device key** — for the case where the key is not the
+  derivation, which has not been observed on this family. Also where you enter a
+  key you captured yourself.
+* **Create a new device key (requires factory reset)** — claims a blank station
+  with a generated identity. **This does not work on this firmware family.**
+  Measured twice on a Guardian 6000 V2, once on 2026-10-14 and once after a
+  factory reset: the station refuses an identity it did not receive from the
+  vendor's app. Choosing this option costs you a factory reset and ends in a
+  timeout. It stays in the list because the same code path works on the older
+  `"TT"` stations.
 
----
+Whatever you pick, leave the WiFi fields alone. These stations have no WiFi
+integration path, and any text in the SSID field silently switches the frame
+format to one the Guardian rejects outright.
 
 ## 6. The app and Home Assistant fight over the station
 
@@ -160,15 +159,26 @@ Both want the single Bluetooth connection, and the station only grants one.
 | --- | --- |
 | HA entry loaded, app open | App never gets past "connecting" |
 | App holds the link | HA reports connection failures until the app releases it |
-| You remove the station in the app | Station becomes **unbound**, HA's saved key stops working |
-| You re-add the station in the app | App writes a **new** key derived from that account's userId; any key you saved earlier is dead |
+| **You remove the station in the app** | The station forgets the `(account number, key)` pair it was written with. HA's credentials are now stale and it cannot get back in |
+| You re-add the station in the app | The app writes a pair derived from that account's number, which is the same pair if it is the same account |
 
-So if you ever re-add the station in Cleanergy, recompute the key from that account's
-userId and update the Home Assistant entry, or it will look broken for reasons that
-have nothing to do with Home Assistant.
+> **Add the station in the app once, then never remove it.** To stop the app
+> competing for the radio, force-stop it or switch the phone's Bluetooth off. The
+> app only has to be off the radio, not off the account. Removing it wipes the
+> pairing Home Assistant depends on, and the failure looks nothing like its cause:
+> HA keeps a connected-looking entity and stale values until you try to re-pair.
 
-If you want the app back for a while: **delete the HA entry first** (or just unload
-it), otherwise you are fighting for the radio and the app will appear broken too.
+Because the key is a pure function of the account number, re-adding the station to
+the **same** account restores the same key, and an entry written with that number
+recovers on its own after a reload. Re-adding to a **different** account changes
+it, and the old entry is then simply wrong.
+
+If you want the app back for a while: **disable the HA entry first** (Settings,
+Devices & Services, the integration's three-dot menu, Disable). That releases the
+radio and keeps every stored value. Disabling and removing are not the same thing,
+and neither one writes to the station: nothing in Home Assistant's own UI can, so
+you can disable, re-enable, even delete and re-add an entry without changing what
+the station holds. Only pairing writes.
 
 ---
 
@@ -192,13 +202,19 @@ because a bound station refuses every outsider regardless of the key.
 To get a station into the state where an outside claim can succeed you need it
 **unbound**, and:
 
-* Removing the device from the app **may** unbind it — it did not reliably do so on
-  firmware 1.2.0.
+* Removing the device from the app is supposed to unbind it. On firmware 1.2.0 it
+  did not reliably do so, which is what made key-probing experiments read as
+  "every candidate rejected" when the real reason was that the station was still
+  bound to somebody and refuses all outsiders regardless of key.
 * The button combination on the side of the unit is not documented for this model and
   behaves inconsistently: on the unit used here, a long press produced a slow blink
   and the combination that produced a fast blink turned the station **off** instead.
 * A factory-reset station still refuses identities it did not get from the vendor, so
-  "reset and claim with a key I invented" is not a working path.
+  "reset and claim with a key I invented" is not a working path. What it checks is
+  the pair: it accepts the account number and key the app wrote, and refuses an
+  invented account number carrying its own correct `md5`. That second measurement is
+  what rules out the station simply recomputing the hash and comparing, so the pair
+  really is stored in the station, and the app is the only thing that writes it.
 
 If you need a claim rather than a pair, budget time for finding the real reset
 behaviour, and prefer keeping one known-good pairing rather than experimenting on the
@@ -210,8 +226,8 @@ only station you have.
 
 Usual causes, in the order they actually happen:
 
-1. **The key is stale.** The station was re-added in the app since you paired.
-   Recompute it (§4).
+1. **The pair is stale.** The station was removed in the app since you paired. Re-add
+   it to the same account and the pair matches your entry again (§4, §6).
 2. **The station is asleep.** Wake it from the app, then work fast — or power-cycle
    and connect within the first couple of minutes.
 3. **The proxy is too far.** The station only answers for a short window; a distant
@@ -252,7 +268,10 @@ people ask about:
 * Your userId, openId and device key are stored in Home Assistant's config entry,
   which lives on disk in `.storage` in clear text. Anyone with access to your Home
   Assistant configuration has them.
-* openId plus device key is enough to control the station. Do not post real values in
+* The account number plus its `md5` prefix is enough to control the station over
+  Bluetooth. The number is not a secret in the usual sense, since an app you own
+  displays it, but it is the only input the key needs, so treat it as a username
+  that must not leak rather than as a harmless integer. Do not post real values in
   issues, forums, or screenshots.
 * Home Assistant does not store your Cleanergy password. It is used once, to read your
   identity out of the login response, and is never written to disk.
@@ -272,5 +291,9 @@ The frame builders live in `protocol.py`:
 
 The two rules that cost the most time to learn, stated once more:
 
-> `openId` empty ⇒ legacy frame ⇒ the Guardian rejects it and kills the link.
-> The device key is `md5(userId)[:10]`, always lower case.
+> The frame format is chosen by which arguments you pass. An identity with **no
+> `openId` and no `userId`** selects the legacy frame, which the Guardian rejects
+> before killing the link. `userId` alone selects the WP frame, the openId field is
+> zero-filled, and the station streams anyway - measured, not inferred.
+> The device key is `md5(userId)[:10]`, always lower case, and
+> `derive_device_key()` is the only implementation the rest of the code may use.

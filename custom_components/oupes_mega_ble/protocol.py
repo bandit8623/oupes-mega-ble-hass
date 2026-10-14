@@ -4,6 +4,8 @@ All values here were reverse-engineered from an Android HCI snoop capture
 (btsnoop_hci.log) of the official Cleanergy app.
 """
 
+import hashlib
+
 # GATT identifiers
 
 SERVICE_UUID     = "00001910-0000-1000-8000-00805f9b34fb"
@@ -248,6 +250,28 @@ OUPES_LEN_BYTE = 0xA8         # 168-byte field block (WP / power stations)
 def _field(s: str, n: int) -> bytes:
     """ASCII field, zero right-padded (matches adjustWidthBaseStr)."""
     return s.encode("ascii", "ignore").ljust(n, b"\x00")[:n]
+
+
+def derive_device_key(user_id: int) -> str:
+    """The binding key the vendor app writes for an account's own user id.
+
+    Lowercase hex ``md5(str(userId))`` truncated to ten characters. Read out of
+    the Cleanergy APK, where ``KeyUtils.createDeviceKey()`` is
+    ``encodeMD5(NetApi.getUserId()).substring(0, 10)``, and confirmed on a
+    Guardian 6000 V2: a frame carrying this key is accepted and one carrying any
+    other key is refused.
+
+    Measured on the same station, the ``openId`` travelling in the same frame is
+    not checked at all - zero-filled it still streamed telemetry - while a wrong
+    userId is refused. So this key plus the userId is the whole credential, and
+    both are known from a password login, which is why the cloud path works
+    without a WeChat openid.
+
+    Note what this is not: it is a hash of an account number, not a per-station
+    secret. Every station an account pairs receives the same key, and anyone who
+    knows the account number can compute it. See docs/GUARDIAN-WP-BLE.md.
+    """
+    return hashlib.md5(str(int(user_id)).encode("ascii")).hexdigest()[:10]
 
 
 def build_config_net_info(

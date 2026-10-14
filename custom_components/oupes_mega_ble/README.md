@@ -5,7 +5,8 @@ power stations. Connects via BLE (continuous or polled) and exposes sensors,
 binary sensors, toggle switches, and writable device settings — all with no cloud
 dependency. This build is labelled for and tested on the **Guardian 6000 V2**;
 see [Guardian / D5 V2 stations](#guardian--d5-v2-stations-ble-name-wp) for what
-those units additionally need (a cloud openId/userId) and how they differ.
+those units additionally need (the account number it was paired with) and how they
+differ.
 
 ---
 
@@ -41,7 +42,7 @@ the Mega family in three ways that matter here:
 
 1. **AUTH carries the owner's cloud identity.** Rather than the key plus random
    token a Mega accepts, these stations expect the *config-net-info* frame, which
-   embeds the **openId** and numeric **userId** of the Cleanergy account the
+   embeds the numeric **userId** of the Cleanergy account the
    station is bound to. If either is missing, or belongs to a different account,
    the station drops the link about four seconds after connecting — which looks
    exactly like a range problem. Enter both under **Integrations → OUPES →
@@ -68,47 +69,33 @@ the Mega family in three ways that matter here:
 
 Tested on a single Guardian 6000 V2 with two expansion battery packs.
 
-#### Getting openId and userId automatically
+#### Which pairing method to choose
 
-The integration can read both values for you: open the options dialog, enter your
-Cleanergy email and password in the two **optional** cloud fields at the bottom,
-and press Submit. It performs the same two requests the official app makes —
-`POST /api/app/user/login`, then `GET /api/app/device/list` — takes `uid` from the
-login response and `openId` from your station's record, and fills the two fields
-above.
+**Use my Cleanergy account number** is the one to pick on a `WP` station. The binding
+key is `md5(account number)` truncated to ten characters, which is how the official
+app generates it, so the number is the whole credential and nothing has to be
+captured, looked up or pasted.
 
-Three things to know about that path:
+**Fetch key from your account** does the same thing one step further removed: it
+logs in with your email and password, reads the account number out of the login
+response and derives the key. Two things to know:
 
-- **The password is not stored.** It is passed to one request and discarded. The
-  options the integration writes are assembled field by field, and the cloud
-  credential fields are deliberately not on that list, so they cannot end up in
-  `.storage` even by accident. If that trade-off is not acceptable to you, leave
-  the fields blank and use the manual route below — it works identically.
-- **The vendor API is plain HTTP**, with no HTTPS endpoint offered. The password
-  crosses the network unencrypted, exactly as it does in the official app.
-- **It needs the station to still be bound to that account.** A station that was
-  unbound from the cloud returns an empty device list, and the dialog says so
-  (*"not in that account's device list"*) rather than reporting a login failure.
-  That is not an error in your credentials — the station still works over
-  Bluetooth with the identity it already holds, and you can enter it manually.
+- **The password is not stored.** It goes into one request and is discarded; the
+  fields the flow writes are assembled one by one and the password is not among them,
+  so it cannot reach `.storage`. The vendor API is plain HTTP, so the password does
+  cross the network unencrypted, exactly as in the official app.
+- **It needs the station to still be in that account's device list.** A station that
+  was unbound from the cloud returns an empty list, and the flow says so instead of
+  reporting a bad password.
 
-If you pair with the **cloud login** method, this lookup happens automatically as
-part of setup, so a Guardian bound to the account you logged into needs no
-typing at all.
+**Enter an existing device key** is for a key that is somehow not the derivation,
+which has not been observed on this family.
 
-#### Finding your openId and userId by hand
+**Create a new device key** does not work on `WP` stations and is documented under
+§5 of [the pairing guide](../../docs/GUARDIAN-WP-BLE.md). It stays because the same
+code path is how the older `TT` stations are set up.
 
-Both come from the same cloud API the official app uses
-(`api.upspowerstation.top`):
-
-- **userId** — the `uid` field of the `POST /api/app/user/login` response. It is
-  the numeric account id; the response has no field literally named `userId`.
-- **openId** — the `openId` of the station's record inside `info.bind` in the
-  `GET /api/app/device/list?token=...` response. Some records hold the literal
-  `"WP"` there instead of an identity, which is never usable.
-
-They must belong to the account the station is currently bound to, and changing
-either one means re-pairing the station.
+#### Where to enter them — order matters
 
 #### Where to enter them — order matters
 
@@ -117,20 +104,20 @@ the dialog that holds them does not exist until the station has been added. In
 order:
 
 1. Install this build and **restart Home Assistant**.
-2. Add the station as usual — accept the Bluetooth discovery card (or add it
-   manually), then work through **Choose pairing method** (existing key / create
-   key / cloud login) and **Connection settings**. On a Guardian this entry will
-   connect and then drop after about four seconds; that is expected, not a range
-   problem.
-3. Open **Settings → Devices & Services**, find the **OUPES Guardian 6000 V2 BLE**
-   entry, and press **Configure** (the gear icon on the integration card). The
-   dialog is titled *OUPES Options — Guardian 6000 V2 build*.
-4. Fill in **Cloud openId (Guardian / D5 V2 only)** and **Cloud userId (Guardian /
-   D5 V2 only)** — or leave both alone and let the integration read them from
-   your Cleanergy account using the two optional cloud fields at the bottom of
-   the same dialog ([details](#getting-openid-and-userid-automatically)). Then
-   press **Submit**. Telemetry normally populates within about twenty seconds, on
-   the next poll after the options are saved.
+2. Make sure the station has been added in the Cleanergy app at least once, because
+   that is what writes the identity into it. Then turn the phone's Bluetooth off, or
+   force-stop the app: the station answers one Bluetooth client at a time.
+3. Add the station: accept the Bluetooth discovery card (or add it manually), choose
+   **Use my Cleanergy account number** on the pairing-method screen, enter the account
+   number the app paired with, then fill in **Connection settings**. Nothing is
+   written to the station; it authenticates with the pair the app left behind.
+4. Telemetry normally appears within about twenty seconds of the entry loading.
+
+The options dialog still carries **Cloud userId** and **Cloud openId** fields for
+stations configured before this flow existed. `userId` there overrides whatever the
+entry was built with, and `openId` is not read by the station at all - it is kept in
+the frame because older firmware expects the field to exist. Neither needs filling in
+on a station set up through the account-number screen.
 
 `userId` is stored as a number, so a zero-prefixed value will not match what the
 station holds, and both fields must come from the account the station is bound to.
@@ -440,7 +427,7 @@ only if you deliberately want to program a new key.
 | Settings entities blank/unknown | Frequent connection gaps | Enable debug raw logging and check for gaps >2 min — indicates BLE range issues |
 | "Cold-probe drop" repeated | BLE interference or device busy | Usually self-resolves on next poll |
 | Setup fails with ConfigEntryNotReady | Device not reachable at startup | HA will retry — power on the device |
-| Connects, then the link drops after ~4 s, on repeat | Guardian / D5 V2 (`WP`) station with no cloud openId/userId | Enter both in the integration options; the startup log says so explicitly |
+| Connects, then the link drops after ~4 s, on repeat | Guardian / D5 V2 (`WP`) station with no account number stored | Re-add or reconfigure with the account number the app paired; the startup log names the integration |
 | DC Input 1 / DC Input 2 Power do not exist | Not a Guardian / D5 V2 station | Those two entities are only created for the `WP` family, where attr 23 carries both inputs |
 
 Enable debug logging for more detail:

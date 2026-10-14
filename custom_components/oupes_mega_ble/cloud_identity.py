@@ -74,7 +74,16 @@ class CloudIdentity:
 
     @property
     def ok(self) -> bool:
-        return self.reason == REASON_OK and bool(self.open_id) and bool(self.user_id)
+        """True when there is enough to talk to the station.
+
+        That means the userId alone. Measured on a Guardian 6000 V2: the station
+        accepts the AUTH frame with the openId field zero-filled and streams
+        telemetry, but refuses the same frame with a different userId, so the
+        openId is carried for completeness rather than required. Demanding it
+        used to fail setups that would have worked, because the vendor's
+        email-and-password API has never returned one.
+        """
+        return self.reason == REASON_OK and bool(self.user_id)
 
     def __repr__(self) -> str:  # pragma: no cover - debugging aid
         return f"CloudIdentity(open_id={self.open_id!r}, user_id={self.user_id!r}, reason={self.reason!r})"
@@ -317,7 +326,7 @@ def resolve_identity(
             None,
         )
     )
-    if not open_id or user_id is None:
+    if user_id is None:
         # Field *names* only, never values: an openId is an identifier and does not
         # belong in a log file. But when this fails, the names are the entire
         # diagnostic - it distinguishes "this account has no openId" from "the
@@ -336,7 +345,17 @@ def resolve_identity(
         return CloudIdentity(
             open_id=open_id,
             user_id=user_id,
-            reason=REASON_NO_OPEN_ID if not open_id else REASON_NO_USER_ID,
+            reason=REASON_NO_USER_ID,
+        )
+
+    if not open_id:
+        # Worth one line, because it looks like a failure and is not one. The
+        # vendor's email-and-password API has never exposed an openId (measured
+        # across the login response, the bound-device list and /device/info), and
+        # the station does not read the field, so this is the normal route.
+        _LOGGER.info(
+            "Vendor cloud returned no openId for this station; continuing with "
+            "the user id alone, which is the half the station actually checks"
         )
 
     return CloudIdentity(open_id=open_id, user_id=user_id, reason=REASON_OK)

@@ -10,6 +10,35 @@ This fork tracks
 
 ## Unreleased
 
+### The station never checked the openId, and the key is a hash of the account number
+
+Two claims that had been repeated through the docs, the READMEs and the setup flow
+turned out to be wrong, and both were blocking setups that would have worked.
+
+**The openId is not verified.** A Guardian 6000 V2 was sent its real key and real
+account number with the openId field zero-filled: accepted, 43 telemetry frames.
+The same frame with a foreign account number: refused. So the station reads the key
+and the userId and ignores the openId, which is the value the setup flow insisted on
+and which the vendor's email-and-password API has never returned. The identity step
+now asks for the account number alone, `CloudIdentity.ok` no longer requires an
+openId, and the guide stopped sending people to hunt for one.
+
+**The binding key is `md5(userId)[:10]`.** Read out of the Cleanergy APK
+(`KeyUtils.createDeviceKey`), and confirmed against the station. That makes the
+account number the only credential a setup needs, so there is a new pairing method,
+**Use my Cleanergy account number**, which derives the key and writes nothing to the
+station. Cloud login uses the same derivation instead of falling back to a claim the
+station refuses.
+
+Also documented from measurement, having been given the opposite advice earlier:
+removing a station in the Cleanergy app wipes the pair that Home Assistant
+authenticates with, while force-stopping the app only releases the radio. Nothing in
+Home Assistant's own UI can write to a station; pairing is the only path that does.
+
+Tests: `tests/test_key_derivation.py` pins the derivation to the two keys this
+station actually accepted and refused, so a refactor cannot quietly change the hash.
+
+
 ### Added
 
 - **`docs/GUARDIAN-WP-BLE.md`** — a complete pairing guide for `WP` stations, written

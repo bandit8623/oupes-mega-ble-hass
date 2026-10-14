@@ -96,16 +96,14 @@ device over BLE and exposes sensors, switches, and settings entities.
 4. Select **Integration**, click **Add**, and install **OUPES Guardian 6000 V2 BLE**.
 5. Restart Home Assistant — required, HACS only swaps the files on disk.
 6. Add the station: accept the Bluetooth discovery card (or add it manually), then
-   follow **Choose pairing method** and **Connection settings**. A Guardian / D5 V2
-   will connect and drop again after about four seconds at this point; that is
-   expected, and the next step is why.
-7. **Guardian / D5 V2 stations only:** with the entry now added, go to
-   **Settings → Devices & Services → OUPES Guardian 6000 V2 BLE → Configure** (the
-   gear icon) and fill in **Cloud openId** and **Cloud userId**
-   ([how to find them](custom_components/oupes_mega_ble/README.md#finding-your-openid-and-userid)).
-   These fields exist only in the options dialog, so this step has to come after
-   step 6 — there is nothing to fill in until the entry exists. Telemetry normally
-   appears within ~20 s of saving. Mega / Exodus / LP users skip this step.
+   follow **Choose pairing method** and **Connection settings**. On a Guardian /
+   D5 V2 pick **Use my Cleanergy account number** and enter the account number the
+   app paired the station with - the integration derives the binding key from it,
+   so there is no key to capture and no openid to hunt for.
+7. Check the entities. Telemetry normally appears within ~20 s. If it does not,
+   the station is almost certainly still being held by the phone: force-stop the
+   Cleanergy app or switch the phone's Bluetooth off, because the station answers
+   one Bluetooth client at a time.
 
 Releases are tagged, so HACS installs a specific version rather than a moving
 branch. Installing over an existing copy of this integration is fine — the domain
@@ -124,7 +122,8 @@ If HACS already tracks `acalcutt/...` or `HeedfulCrayon/...`, the switch is:
    same `custom_components/oupes_mega_ble/` directory — expect the entities to go
    unavailable for one restart.
 2. Restart Home Assistant.
-3. Enter openId/userId in the integration options if you are on a `WP` station.
+3. If you are on a `WP` station, re-enter the account number during the re-add; the
+   key is derived from it.
 4. Check the entities are live again, then **untrack** the old repository so its
    update entity cannot offer to overwrite these files.
 
@@ -158,12 +157,11 @@ The two OUPES families need different things, so pick the row that matches your
 station. If you do not know: the app calls it a **Guardian / D5 V2**, and it
 advertises the BLE name `WP`. A **Mega** advertises `TT`.
 
-### Guardian / D5 V2 (`WP`) — needs an account identity
+### Guardian / D5 V2 (`WP`) — needs the account number, once
 
-These stations put the owner's `openId` and numeric `userId` *inside* the
-Bluetooth authentication frame. Without them the station answers the AUTH packet
-and then drops Bluetooth about four seconds later, which looks exactly like a
-range problem.
+These stations put the owner's account identity *inside* the Bluetooth
+authentication frame. Without it the station answers the AUTH packet and then drops
+Bluetooth about four seconds later, which looks exactly like a range problem.
 
 **The device key is not a secret the vendor holds.** The Cleanergy app generates it
 with `md5(userId)` truncated to ten characters:
@@ -173,54 +171,61 @@ python -c "import hashlib; print(hashlib.md5(b'24680').hexdigest()[:10])"
 # -> 9256f177e0
 ```
 
-So the pairing needs two things, and only one of them is awkward. The **userId**
-comes back from the vendor login API as `info.uid`. The **openId** does not: on
-accounts provisioned through WeChat it appears nowhere in the password login, the
-device list or the device info, and its shape is a WeChat openid. Getting an openId
-means asking the vendor or taking it off the Bluetooth link while the app pairs — see
-the guide, §3.
+So the whole credential is the account number, and this integration derives the key
+from it for you. It is the number the vendor's own app hashes, which is why the
+station accepts it.
 
-**There is no account-free way to set one up, and that is the device's doing, not
-this integration's.** The identity comes from the vendor cloud and the station
-recognises it. Measured on a Guardian 6000 V2: factory reset twice, each followed
-immediately by a claim carrying a locally generated but correctly shaped identity,
-confirmed present in the AUTH frame — both timed out with the claim uncompleted,
-while the same frame carrying the real identity is accepted by the same station.
-The identity is the only variable that changed. Setting one of these up without
-the vendor would mean reversing whatever the station checks, which nobody has
-done.
+**The `openId` is not required, and never was.** Measured on a Guardian 6000 V2: the
+station accepted its real key and real account number with the openId field
+zero-filled and streamed 43 telemetry frames, and refused the same frame with the
+account number changed. Earlier revisions of this README told people the openId was
+the awkward half of the credential, unobtainable without WeChat or a Bluetooth
+capture. It was carried forward from an old pairing into every later experiment in
+the same frame as the two values that do get checked, so nothing had ever isolated
+it. It is decoration.
+
+**The identity has to be written by the app first, and that is the device's doing,
+not this integration's.** The station stores the `(account number, key)` pair the
+app wrote and checks both halves: an invented account number carrying its own
+correct `md5` is refused, which rules out the station merely recomputing the hash.
+So a station that has never been in the app cannot be set up from here.
 
 So the order of operations is fixed by the hardware, not by preference:
 
 1. **Power on** the station; the IoT indicator should be lit.
-2. **Add it in the Cleanergy app first.** That is what binds the station to an
-   account and installs the identity Home Assistant needs. Skip if it is already
-   in the app.
-3. **Write down the account's `userId`** (vendor login API → `info.uid`) and derive
-   the key from it, as above. Get the `openId` per the guide, §3.
-4. **Switch the phone's Bluetooth off** — or force-close the app. One Bluetooth
-   client at a time, and an app that is still holding the station produces a
-   pairing failure that looks like a broken integration.
-5. In Home Assistant: **Settings → Devices & Services → Add Integration → OUPES →
-   Specify manually → Other / already-paired device → Enter an existing device key**,
-   and enter the address, that derived key, the `openId` and the `userId`. This path
-   writes nothing to the station; it just turns up with the credentials it already
-   expects, which is why it works when the station is already bound.
-6. Understand what step 5 costs: **Home Assistant now holds the station's single
-   Bluetooth connection**, so Cleanergy stops reporting it until you re-add. That is
-   the arrangement, not a malfunction.
+2. **Add it in the Cleanergy app first.** That is what writes the pair into the
+   station. Skip if it is already in the app.
+3. **Never remove it from the app afterwards.** Closing the app is enough to free
+   the radio; removing the station wipes the pairing Home Assistant authenticates
+   with, and re-adding rewrites it.
+4. **Write down the account number** the app paired with (the app's account screen,
+   or the vendor login API as `info.uid`).
+5. **Switch the phone's Bluetooth off** — or force-close the app. One Bluetooth
+   client at a time, and an app still holding the station produces a pairing
+   failure that looks like a broken integration.
+6. In Home Assistant: **Settings → Devices & Services → Add Integration → OUPES →
+   Specify manually → Other / already-paired device → Use my Cleanergy account
+   number**, enter the number, then fill in **Connection settings**. Nothing is
+   written to the station on this path; it simply turns up with the credentials the
+   app already left there.
+7. Understand what that costs: **Home Assistant now holds the station's single
+   Bluetooth connection**, so Cleanergy stops reporting it while the entry is loaded.
+   That is the arrangement, not a malfunction. Disable the entry to hand the radio
+   back to the app.
 
 **Do not use "Create a new device key" on a station that is already paired.** That
-path claims the station and overwrites its key; if it fails partway you have lost the
-pairing the app installed. Claiming is for unbound stations, and on this firmware
-family that turns out to mean stations the vendor has never bound — see the guide, §7.
+path claims the station and overwrites what it holds, and on this firmware family it
+does not complete at all - measured twice, once immediately after a factory reset.
+Claiming works on the older `TT` stations, and on a `WP` unit only if the vendor has
+never bound it.
 
-Would rather not hand this integration your password? The manual path above needs no
-password at all, only the four values.
+Would rather not hand this integration your password? The account-number path needs
+none. It is one number, and the key follows from it.
 
-If the station is brand new and you would rather never install the app: you
-cannot. Let it bind once, let Home Assistant take the pairing over, and the app
-can go away afterwards.
+If the station is brand new and you would rather never install the app: you cannot.
+Let it bind once, let Home Assistant take the pairing over, and the app can go away
+afterwards - though leave it installed and closed rather than removing the device from
+it, because removing wipes the pairing.
 
 ### Mega (`TT`) — no identity needed
 
