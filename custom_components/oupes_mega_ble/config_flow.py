@@ -137,6 +137,33 @@ def _identity_source_phrase(source: str) -> str:
     return "recorded when this station was set up"
 
 
+def _parse_account_number(raw: Any) -> int:
+    """Read an account number out of a form field.
+
+    The UI control for this is a NumberSelector, which delivers a **float** over
+    the websocket and a string over the REST flow API, so ``24680`` can arrive as
+    ``24680``, ``24680.0`` or ``"24680"``. ``int("24680.0")`` raises, which used to
+    reject a perfectly valid account number on the first try. Empty, negative,
+    fractional and non-numeric input all come back as 0, meaning "not given".
+    """
+    if raw is None:
+        return 0
+    if isinstance(raw, bool):
+        return 0
+    if isinstance(raw, int):
+        return raw
+    if isinstance(raw, float):
+        return int(raw) if raw == int(raw) else 0
+    text = str(raw).strip()
+    if not text:
+        return 0
+    try:
+        number = float(text)
+    except ValueError:
+        return 0
+    return int(number) if number == int(number) else 0
+
+
 def _is_guardian_series(local_name: str | None, product_id: str | None) -> bool:
     """True when the station belongs to the Guardian / D5 V2 ("WP") family.
 
@@ -608,7 +635,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if user_input.get("go_back"):
                 return await self.async_step_choose_method()
             try:
-                account = int(str(user_input.get(CONF_USER_ID, "")).strip())
+                account = _parse_account_number(user_input.get(CONF_USER_ID))
             except (TypeError, ValueError):
                 account = 0
             if account <= 0:
@@ -802,7 +829,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         if user_input is not None:
             open_id = str(user_input.get(CONF_OPEN_ID, "") or "").strip()
             try:
-                user_id = int(user_input.get(CONF_USER_ID, 0) or 0)
+                user_id = _parse_account_number(user_input.get(CONF_USER_ID))
             except (TypeError, ValueError):
                 user_id = -1
 
@@ -1195,7 +1222,7 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
             fetch_mail = str(user_input.get("cloud_email", "") or "").strip()
             fetch_passwd = str(user_input.get("cloud_password", "") or "").strip()
             try:
-                raw_user_id = int(user_input.get(CONF_USER_ID, 0) or 0)
+                raw_user_id = _parse_account_number(user_input.get(CONF_USER_ID))
             except (TypeError, ValueError):
                 raw_user_id = -1
             # Set before the optional lookup below: the provenance update at the
