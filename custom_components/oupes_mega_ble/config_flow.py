@@ -369,20 +369,18 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # real identity is accepted. A blank station does not accept any identity, so
         # the option would only cost someone a factory reset.
         guardian = _is_guardian_series(self._advertised_name, self._product_id)
-        methods = (
-            {
-                KEY_METHOD_ACCOUNT: "Use my Cleanergy account number",
-                KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
-                KEY_METHOD_EXISTING: "Enter an existing device key",
-                KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
-            }
-            if guardian
-            else {
-                KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
-                KEY_METHOD_EXISTING: "Enter an existing device key",
-                KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
-            }
-        )
+        # All four are offered whatever the station is, because a hand-typed address
+        # carries no advertisement and therefore no family. Manual entry is the path
+        # for a station that no proxy could see, which is usually the newer family,
+        # so hiding the account-number option here would hide it from exactly the
+        # people who need it. The default still splits: an unrecognised station leads
+        # with the legacy claim, a known Guardian with the derivation.
+        methods = {
+            KEY_METHOD_ACCOUNT: "Use my Cleanergy account number",
+            KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
+            KEY_METHOD_EXISTING: "Enter an existing device key",
+            KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
+        }
 
         return self.async_show_form(
             step_id="choose_method",
