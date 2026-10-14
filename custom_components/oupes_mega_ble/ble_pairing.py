@@ -92,6 +92,8 @@ async def async_pair_device(
     ssid: str = "",
     psk: str = "",
     region: str = "wp-cn",
+    open_id: str = "",
+    user_id: int = 0,
 ) -> PairingResult:
     """Run the full BLE pairing flow for an OUPES Mega device.
 
@@ -101,6 +103,12 @@ async def async_pair_device(
         device_key: 10-character hex key to program.
         max_cycles: Maximum reconnect cycles to attempt.
         progress_callback: Optional async callable(msg: str) for UI updates.
+        open_id: Guardian / D5 V2 only - the account openId that belongs in the
+            AUTH frame. Required on "WP" stations: without it the station
+            answers the AUTH with ``03 80 01 01 01`` and drops the link about
+            four seconds after connecting, so a claim that looked successful
+            would leave the device unusable. Leave empty for legacy stations.
+        user_id: Guardian / D5 V2 only - the numeric account id.
 
     Returns:
         PairingResult indicating outcome.
@@ -146,6 +154,8 @@ async def async_pair_device(
             ssid=ssid,
             psk=psk,
             region=region,
+            open_id=open_id,
+            user_id=user_id,
         )
         if result == PairingResult.SUCCESS:
             return result
@@ -164,6 +174,8 @@ async def _pairing_cycle(
     ssid: str = "",
     psk: str = "",
     region: str = "wp-cn",
+    open_id: str = "",
+    user_id: int = 0,
 ) -> PairingResult:
     """Execute one full pairing cycle on a single BLE connection."""
 
@@ -199,11 +211,19 @@ async def _pairing_cycle(
         await asyncio.sleep(1.5)
 
         # Step 1: AUTH
+        #
+        # On a Guardian / D5 V2 this must be the account-bound config-net-info
+        # frame, which build_init_sequence() only selects when an identity is
+        # supplied; an identity-less AUTH is answered and then dropped. With an
+        # SSID present the legacy frame is still used, which is why WiFi setup on
+        # this family is listed as untested in the README.
         auth_seq = build_init_sequence(
             key,
             ssid=ssid,
             psk=psk,
             region=region,
+            open_id=open_id,
+            user_id=user_id,
         )
         for pkt in auth_seq:
             await client.write_gatt_char(WRITE_CHAR_UUID, pkt, response=False)

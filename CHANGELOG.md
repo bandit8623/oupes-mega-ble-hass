@@ -10,7 +10,44 @@ This fork tracks
 
 ## Unreleased
 
+### Fixed
+
+- **Fresh Guardian setups could not authenticate.** The setup flow ran the claim
+  sequence without ever passing an account identity, so a Guardian / D5 V2 station
+  ended up correctly paired to its key and then dropped Bluetooth four seconds
+  later on every connection. `openId` / `userId` now reach
+  `ble_pairing.async_pair_device()`, which lets `build_init_sequence()` emit the
+  station's own config-net-info AUTH frame instead of the legacy Mega one. Only
+  first-time setup was affected: stations already running were fine because the
+  identity got typed into Options afterwards.
+- **Setup no longer dead-ends when the cloud has no usable key.** On this firmware
+  family the cloud record stores the family tag (`"WP"`) in `device_key` instead of
+  a real key, so the cloud method reported a login failure after a login that had
+  worked. The identity is the half a Guardian cannot do without, and it *does* come
+  back, so setup now continues with a locally generated key instead of stopping.
+- `strings.json` had fallen behind `translations/en.json`: the `go_back` and
+  `runtime_max_minutes` labels were missing from it entirely, and the pairing
+  instructions were an older revision (missing the "the IoT module turns off,
+  press it back on" step). Anything generated from `strings.json` — including
+  future translations — could not have had those strings.
+
 ### Added
+
+- **Claim with a local identity - no cloud account.** For a factory-reset station,
+  Home Assistant now mints the openId, the account id and the device key itself and
+  writes them over Bluetooth: no OUPES / Cleanergy account, no password, no
+  internet. A minted account id stays inside the 5-byte wire field *and* below
+  2<sup>31</sup>, because an integer overflow in station firmware is the one
+  mistake here that Home Assistant could not undo. Not yet verified against a
+  physical station; the README spells out what trying it costs.
+- **An identity step in setup.** When a Guardian's identity could not be recovered
+  from the cloud, setup asks for it there and then, instead of creating an entry
+  that silently drops the connection and leaving the fix for the options dialog.
+- **Identity provenance is recorded, not guessed.** A locally minted openId is
+  indistinguishable from a vendor-assigned one - same length, same alphabet, same
+  `o` prefix - so where it came from is stored with the entry and the options dialog
+  states it. That is the difference between "this station is missing from my cloud
+  account" being an explanation and being an afternoon of debugging.
 
 - **openId / userId can now be fetched from the vendor cloud instead of typed.**
   The options dialog gained two optional cloud-account fields: supply them and
@@ -24,15 +61,12 @@ This fork tracks
   that account's device list". They need different fixes, and a station that was
   unbound from the cloud is a normal state, not an error.
 
-### Fixed
-
-- `strings.json` had fallen behind `translations/en.json`: the `go_back` and
-  `runtime_max_minutes` labels were missing from it entirely, and the pairing
-  instructions were an older revision (missing the "the IoT module turns off,
-  press it back on" step). Anything generated from `strings.json` — including
-  future translations — could not have had those strings.
-
 ### Tests
+
+- 8 new tests in `tests/test_local_identity.py`: minted openIds keep the vendor
+  shape and land at the correct offsets in the AUTH frame, the accepted `0x01` SSID
+  pad byte survives minting, and minted account ids are proven to fit both the
+  5-byte wire field and a signed 32-bit int.
 
 - 27 new tests in `tests/test_cloud_identity.py` for the vendor-response parsing,
   including the two shapes confirmed against the live API (`uid` rather than

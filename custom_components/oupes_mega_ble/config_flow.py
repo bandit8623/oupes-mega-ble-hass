@@ -42,7 +42,8 @@ from .cloud_api import (
     async_fetch_cloud_identity,
     async_fetch_device_key,
 )
-from .cloud_identity import open_id_fits, user_id_fits
+from .cloud_identity import USER_ID_MAX, open_id_fits, user_id_fits
+from .local_identity import minted_identity
 from .cloud_api import async_cloud_login, async_fetch_device_key
 from .const import (
     ATTR78_RUNTIME_MAX,
@@ -52,6 +53,7 @@ from .const import (
     CONF_DEBUG_RAW,
     CONF_DEVICE_ID,
     CONF_DEVICE_KEY,
+    CONF_IDENTITY_SOURCE,
     CONF_NAME,
     CONF_OPEN_ID,
     CONF_POLL_INTERVAL,
@@ -60,6 +62,9 @@ from .const import (
     CONF_STALE_TIMEOUT,
     CONF_USER_ID,
     DOMAIN,
+    IDENTITY_SOURCE_CLOUD,
+    IDENTITY_SOURCE_LOCAL,
+    IDENTITY_SOURCE_MANUAL,
     STALE_TIMEOUT,
     UPDATE_INTERVAL,
     series_from_product_id,
@@ -72,6 +77,7 @@ _HEX_CHARS = frozenset("0123456789abcdefABCDEF")
 KEY_METHOD_CREATE = "create_new_key"
 KEY_METHOD_EXISTING = "existing_key"
 KEY_METHOD_CLOUD = "cloud_login"
+KEY_METHOD_LOCAL = "local_claim"
 
 
 def _valid_device_key(key: str) -> bool:
@@ -96,6 +102,44 @@ def _default_entry_name(local_name: str | None, product_id: str | None) -> str:
     if tag.startswith("TT"):
         return "OUPES Mega"
     return (local_name or "").strip() or "OUPES Power Station"
+
+
+def _identity_source_phrase(source: str) -> str:
+    """Human wording for how a stored identity was obtained.
+
+    A locally minted openId cannot be told apart from a vendor-assigned one by
+    looking at it - same length, same alphabet - so the flow records where it
+    came from and the UI reads that back.
+    """
+    if source == IDENTITY_SOURCE_LOCAL:
+        return (
+            "generated locally by this integration, which is why this station is "
+            "absent from every vendor cloud account"
+        )
+    if source == IDENTITY_SOURCE_CLOUD:
+        return "read from your OUPES / Cleanergy cloud account"
+    if source == IDENTITY_SOURCE_MANUAL:
+        return "typed in by hand"
+    # Entries written before provenance was recorded: say nothing specific rather
+    # than guess, because a wrong guess sends people hunting for a cloud binding
+    # that was never there.
+    return "recorded when this station was set up"
+
+
+def _is_guardian_series(local_name: str | None, product_id: str | None) -> bool:
+    """True when the station belongs to the Guardian / D5 V2 ("WP") family.
+
+    Only these stations bind their AUTH frame to an account identity, so this
+    decides whether setup has to obtain openId and userId at all. The advertised
+    tag wins over product_id because it is present even when the manufacturer
+    data carries no recognisable product field.
+    """
+    tag = (local_name or "").strip().upper()
+    if tag.startswith("WP"):
+        return True
+    if tag.startswith("TT"):
+        return False
+    return series_from_product_id(product_id) == "guardian"
 
 
 def _extract_device_id(manufacturer_data: dict[int, bytes]) -> str | None:
@@ -183,8 +227,16 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # Guardian / D5 V2 units need both values in their AUTH frame, so
         # capturing them here saves a manual lookup afterwards. Empty means
         # "not recovered" and leaves the manual path in the options dialog.
-        self._cloud_open_id: str = ""
-        self._cloud_user_id: int = 0
+        self._identity_open_id: str = ""
+        self._identity_user_id: int = 0
+        # Provenance of the two values above, so the UI can explain a station that
+        # is deliberately missing from a cloud account. See const.py.
+        self._identity_source: str = ""
+        # The advertised BLE name ("TT" / "WP"), kept apart from _name because
+        # _name may have been replaced by a friendly default title.
+        self._advertised_name: str = ""
+        # Which step to hand control back to once identity has been collected.
+        self._identity_next: str = "connection_settings"
 
     # -- Automatic bluetooth discovery ------------------------------------
 
@@ -198,6 +250,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._address = discovery_info.address
         self._device_id = _extract_device_id(discovery_info.manufacturer_data)
         self._product_id = _extract_product_id(discovery_info.manufacturer_data)
+        self._advertised_name = discovery_info.name or ""
         self._name = _default_entry_name(discovery_info.name, self._product_id)
 
         self.context["title_placeholders"] = {
@@ -282,6 +335,8 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 return await self.async_step_existing_key()
             if method == KEY_METHOD_CLOUD:
                 return await self.async_step_cloud_login()
+            if method == KEY_METHOD_LOCAL:
+                return await self.async_step_local_claim()
 
         return self.async_show_form(
             step_id="choose_method",
@@ -292,6 +347,10 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                             KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
                             KEY_METHOD_EXISTING: "Enter an existing device key",
                             KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
+                            KEY_METHOD_LOCAL: (
+                                "Claim with a local identity - no cloud account "
+                                "(factory-reset station)"
+                            ),
                         }
                     ),
                 }
@@ -328,7 +387,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._pairing_key = new_key
                 self._wifi_ssid = user_input.get("wifi_ssid", "").strip()
                 self._wifi_psk = user_input.get("wifi_psk", "").strip()
-                return await self.async_step_pairing()
+                return await self._maybe_identity("pairing")
 
         suggested_key = self._pairing_key or _generate_device_key()
         return self.async_show_form(
@@ -350,6 +409,56 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             errors=errors,
         )
 
+    # -- Method D: Claim a station that has no cloud account --------------
+
+    async def async_step_local_claim(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Write a locally generated identity and key into a blank station.
+
+        A Guardian / D5 V2 needs an account identity in its AUTH frame, and the
+        vendor cloud is normally where that comes from. A factory-reset station
+        has no identity stored yet - which is how the phone app is able to bind
+        it in the first place - so this integration can write its own and never
+        contact the vendor: no account, no password, no internet.
+
+        The trade-off is stated on the form rather than hidden, because it is
+        not reversible from Home Assistant: the minted identity cannot be looked
+        up in the vendor cloud, and the official app will overwrite it if it
+        binds the station afterwards.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if user_input.get("go_back"):
+                return await self.async_step_choose_method()
+            if not user_input.get("confirm_local_claim"):
+                errors["confirm_local_claim"] = "confirm_required"
+            else:
+                self._identity_open_id, self._identity_user_id = minted_identity()
+                self._identity_source = IDENTITY_SOURCE_LOCAL
+                if not self._pairing_key:
+                    self._pairing_key = _generate_device_key()
+                _LOGGER.info(
+                    "Claiming %s with a locally generated identity; this station "
+                    "will not appear in any vendor cloud account",
+                    self._address,
+                )
+                return await self.async_step_pairing()
+
+        return self.async_show_form(
+            step_id="local_claim",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("confirm_local_claim", default=False): bool,
+                    vol.Optional("go_back", default=False): bool,
+                }
+            ),
+            description_placeholders={"name": self._name},
+            errors=errors,
+        )
+
+    # -- Shared: BLE pairing progress -------------------------------------
+
     async def async_step_pairing(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -359,6 +468,12 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "hass": self.hass,
                 "address": self._address,
                 "device_key": self._pairing_key,
+                # Guardian / D5 V2 stations authenticate with the account
+                # identity, so pairing has to have it: an identity-less AUTH is
+                # answered and then dropped about four seconds later, which
+                # leaves a freshly claimed station unusable.
+                "open_id": self._identity_open_id,
+                "user_id": self._identity_user_id,
             }
             if self._wifi_ssid:
                 kwargs["ssid"] = self._wifi_ssid
@@ -428,7 +543,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_DEVICE_KEY] = "invalid_device_key"
             else:
                 self._pairing_key = raw_key
-                return await self.async_step_connection_settings()
+                return await self._maybe_identity("connection_settings")
 
         return self.async_show_form(
             step_id="existing_key",
@@ -469,28 +584,41 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     self._device_id,
                     self._address,
                 )
+                if identity is not None and identity.ok:
+                    self._identity_open_id = identity.open_id or ""
+                    self._identity_user_id = int(identity.user_id or 0)
+                    self._identity_source = IDENTITY_SOURCE_CLOUD
+
                 if key:
+                    # The cloud holds a real key for this station: pair with it.
                     self._pairing_key = key
-                    if identity is not None and identity.ok:
-                        self._cloud_open_id = identity.open_id or ""
-                        self._cloud_user_id = int(identity.user_id or 0)
-                    elif identity is not None:
-                        # Deliberately not fatal: a station that was unbound from
-                        # the cloud (or bound to a different account) still pairs
-                        # fine, and a Guardian can be finished from the options
-                        # dialog. Blocking here would lock people out of the
-                        # integration for a cloud-side condition they may not be
-                        # able to change.
-                        _LOGGER.warning(
-                            "Connected to the OUPES cloud but could not recover "
-                            "this station's account identity (%s). If this is a "
-                            "Guardian / D5 V2 ('WP') station, enter openId and "
-                            "userId in the integration options after setup, or it "
-                            "will drop Bluetooth after a few seconds",
-                            identity.reason,
-                        )
-                    return await self.async_step_connection_settings()
-                errors["cloud_email"] = "cloud_login_failed"
+                    return await self._maybe_identity("connection_settings")
+
+                if identity is not None and identity.ok:
+                    # No usable key in the cloud record, which is normal on this
+                    # firmware family - the record stores the family tag ("WP")
+                    # in device_key instead of the real one. The identity came
+                    # back, and that is the part a Guardian cannot do without,
+                    # so carry on and let the integration write its own key over
+                    # BLE instead of failing the setup.
+                    _LOGGER.info(
+                        "OUPES cloud returned no usable device_key for this "
+                        "station (the record carries %r), but the account "
+                        "identity was recovered - continuing with a key generated "
+                        "by this integration",
+                        "WP",
+                    )
+                    return await self.async_step_create_key()
+
+                # Login worked but the station is not in that account, or the
+                # record has no identity. Say which, because the two need
+                # different fixes and a station that was unbound from the cloud
+                # is a normal state rather than a wrong password.
+                errors["cloud_email"] = (
+                    f"cloud_identity_{identity.reason}"
+                    if identity is not None
+                    else "cloud_login_failed"
+                )
 
         return self.async_show_form(
             step_id="cloud_login",
@@ -511,6 +639,84 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     # -- Connection settings (final step before entry creation) ----------
 
+    def _needs_identity(self) -> bool:
+        """Whether this station still needs an openId/userId before continuing.
+
+        Guardian / D5 V2 stations put the account identity inside their AUTH
+        frame, so without it the station answers and then drops Bluetooth a few
+        seconds later - which reads exactly like a range problem. Legacy "TT"
+        stations never need it, and a Guardian whose identity already came from
+        the cloud does not have to be asked.
+        """
+        if self._identity_open_id and self._identity_user_id:
+            return False
+        return _is_guardian_series(self._advertised_name, self._product_id)
+
+    async def _maybe_identity(self, next_step: str) -> FlowResult:
+        """Insert the identity step when the station needs one."""
+        if not self._needs_identity():
+            if next_step == "pairing":
+                return await self.async_step_pairing()
+            return await self.async_step_connection_settings()
+        self._identity_next = next_step
+        return await self.async_step_identity()
+
+    async def async_step_identity(
+        self, user_input: dict[str, Any] | None = None
+    ) -> FlowResult:
+        """Ask for the account identity a Guardian / D5 V2 station requires.
+
+        This step is the fallback for the case the cloud could not supply the
+        identity - a station that has been unbound from its account, or bound to
+        a different one. It is deliberately a dead end for nothing: the values
+        are stored on the entry exactly as if the cloud had provided them.
+        """
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            open_id = str(user_input.get(CONF_OPEN_ID, "") or "").strip()
+            try:
+                user_id = int(user_input.get(CONF_USER_ID, 0) or 0)
+            except (TypeError, ValueError):
+                user_id = -1
+
+            if not open_id:
+                errors[CONF_OPEN_ID] = "required"
+            elif not open_id_fits(open_id):
+                errors[CONF_OPEN_ID] = "invalid_open_id"
+            if user_id <= 0:
+                errors[CONF_USER_ID] = "invalid_user_id"
+
+            if not errors:
+                self._identity_open_id = open_id
+                self._identity_user_id = user_id
+                self._identity_source = IDENTITY_SOURCE_MANUAL
+                if self._identity_next == "pairing":
+                    return await self.async_step_pairing()
+                return await self.async_step_connection_settings()
+
+        return self.async_show_form(
+            step_id="identity",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(CONF_OPEN_ID, default=self._identity_open_id): (
+                        TextSelector(TextSelectorConfig(type=TextSelectorType.TEXT))
+                    ),
+                    vol.Required(
+                        CONF_USER_ID, default=self._identity_user_id or 0
+                    ): NumberSelector(
+                        NumberSelectorConfig(
+                            min=1,
+                            max=USER_ID_MAX,
+                            step=1,
+                            mode=NumberSelectorMode.BOX,
+                        )
+                    ),
+                }
+            ),
+            description_placeholders={"name": self._name},
+            errors=errors,
+        )
+
     async def async_step_connection_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
@@ -530,6 +736,24 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             debug_raw = user_input.get(CONF_DEBUG_RAW, False)
             await self.async_set_unique_id(self._address)
             self._abort_if_unique_id_configured()
+            options = {
+                CONF_CONTINUOUS: continuous,
+                CONF_POLL_INTERVAL: poll_interval,
+                CONF_STALE_TIMEOUT: stale_timeout,
+                CONF_RUNTIME_MAX: runtime_max,
+                CONF_DEBUG_ATTRS: debug_attrs,
+                CONF_DEBUG_RAW: debug_raw,
+                # Empty for Mega-family stations and for any Guardian whose
+                # cloud binding could not be read; the options dialog is the
+                # fallback in both cases.
+                CONF_OPEN_ID: self._identity_open_id,
+                CONF_USER_ID: self._identity_user_id,
+            }
+            if self._identity_source:
+                # Recorded, never inferred: a minted openId looks exactly like a
+                # vendor-assigned one, and "local" is the only clue that the
+                # station will never show up in a cloud device list.
+                options[CONF_IDENTITY_SOURCE] = self._identity_source
             return self.async_create_entry(
                 title=self._name,
                 data={
@@ -539,19 +763,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_DEVICE_ID: self._device_id or "",
                     CONF_PRODUCT_ID: self._product_id or "",
                 },
-                options={
-                    CONF_CONTINUOUS: continuous,
-                    CONF_POLL_INTERVAL: poll_interval,
-                    CONF_STALE_TIMEOUT: stale_timeout,
-                    CONF_RUNTIME_MAX: runtime_max,
-                    CONF_DEBUG_ATTRS: debug_attrs,
-                    CONF_DEBUG_RAW: debug_raw,
-                    # Empty for Mega-family stations and for any Guardian whose
-                    # cloud binding could not be read; the options dialog is the
-                    # fallback in both cases.
-                    CONF_OPEN_ID: self._cloud_open_id,
-                    CONF_USER_ID: self._cloud_user_id,
-                },
+                options=options,
             )
 
         default_poll = int(UPDATE_INTERVAL.total_seconds())
@@ -700,6 +912,17 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "device_key": self._pairing_key,
             }
             if self._reconfigure_repair:
+                # Full claim sequence - device must be in pairing mode. Re-run it
+                # with the identity already on the entry, or a Guardian will drop
+                # the link seconds after being re-paired.
+                reconf_entry = self._get_reconfigure_entry()
+                kwargs["open_id"] = str(
+                    reconf_entry.options.get(CONF_OPEN_ID, "") or ""
+                )
+                try:
+                    kwargs["user_id"] = int(reconf_entry.options.get(CONF_USER_ID, 0) or 0)
+                except (TypeError, ValueError):
+                    kwargs["user_id"] = 0
                 # Full claim sequence - device must be in pairing mode.
                 if self._wifi_ssid:
                     kwargs["ssid"] = self._wifi_ssid
@@ -842,6 +1065,9 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                 raw_user_id = int(user_input.get(CONF_USER_ID, 0) or 0)
             except (TypeError, ValueError):
                 raw_user_id = -1
+            # Set before the optional lookup below: the provenance update at the
+            # end reads it whether or not credentials were entered.
+            identity = None
 
             # Optional lookup, so nobody has to poke the vendor API by hand. The
             # credentials exist only inside this call: they are not part of the
@@ -889,6 +1115,17 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                 opts[CONF_DEVICE_KEY] = raw_key or current_key
                 opts[CONF_OPEN_ID] = raw_open_id
                 opts[CONF_USER_ID] = raw_user_id
+                # Keep provenance honest. A cloud lookup overwrites both values so
+                # it also overwrites the label; a hand-edited openId is no longer
+                # whatever the previous label claimed. Without this, an entry that
+                # was minted locally and later fixed up from the cloud would go on
+                # telling the owner to look for a binding that does exist.
+                if identity is not None and identity.ok:
+                    opts[CONF_IDENTITY_SOURCE] = IDENTITY_SOURCE_CLOUD
+                elif raw_open_id != str(
+                    self._entry.options.get(CONF_OPEN_ID, "") or ""
+                ):
+                    opts[CONF_IDENTITY_SOURCE] = IDENTITY_SOURCE_MANUAL
                 opts[CONF_CONTINUOUS] = bool(user_input.get(CONF_CONTINUOUS, True))
                 opts[CONF_POLL_INTERVAL] = int(
                     user_input.get(CONF_POLL_INTERVAL, default_poll)
@@ -963,4 +1200,13 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                 }
             ),
             errors=errors,
+            # Says where the stored identity came from. A locally minted openId is
+            # indistinguishable from a vendor-assigned one by inspection, so this
+            # reads the provenance recorded when it was written - and "why is my
+            # station missing from my cloud account" stops being a debugging job.
+            description_placeholders={
+                "identity_source": _identity_source_phrase(
+                    str(self._entry.options.get(CONF_IDENTITY_SOURCE, "") or "")
+                ),
+            },
         )

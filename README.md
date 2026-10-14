@@ -141,9 +141,44 @@ intended outcome, not a rivalry.
 
 ## Quick Start
 
-1. Power on the OUPES device and press the IoT button (indicator flashes).
+The two OUPES families need different things, so pick the row that matches your
+station. If you do not know: the app calls it a **Guardian / D5 V2**, and it
+advertises the BLE name `WP`. A **Mega** advertises `TT`.
+
+### Guardian / D5 V2 (`WP`) — needs an account identity
+
+These stations put the owner's `openId` and numeric `userId` *inside* the
+Bluetooth authentication frame. Without them the station answers the AUTH packet
+and then drops Bluetooth about four seconds later, which looks exactly like a
+range problem. You get those two values one of three ways:
+
+| Your situation | Do this |
+| --- | --- |
+| Fresh or factory-reset station, you want Home Assistant only, no vendor cloud | **Claim with a local identity — no cloud account.** Home Assistant mints the identity and the key itself. Needs no account, no password, no internet. |
+| Station is already added to the Cleanergy app and you want the app to keep working | **Fetch key from Cleanergy cloud account.** One-time sign-in recovers the key *and* the identity. Credentials are never stored (see [security](SECURITY.md)); the vendor API is plain HTTP. |
+| Vendor cloud unreachable, station bound to someone else's account, or you simply refuse to give this integration your password | **Enter an existing device key**, then type `openId` and `userId` yourself. |
+
+Then: power on, put the station in pairing mode (**hold IoT 5 s until it flashes
+rapidly**), and let HA auto-discover it. Only one Bluetooth client can be
+attached at a time, so keep the phone app closed during setup.
+
+A locally claimed station is deliberately **absent from every vendor cloud
+account**, and if the official app binds it afterwards the app overwrites the
+identity — undoing the local claim needs another factory reset. The setup screen
+says this before it writes anything, and **Options** tells you which kind of
+identity a station carries.
+
+### Mega (`TT`) — no identity needed
+
+1. Power on and press the IoT button (indicator flashes).
 2. HA auto-discovers the device — click the notification to set up.
-3. Choose **Create New Key** (factory-reset the device first: hold IoT 5 s).
+3. Choose **Create a new device key** (factory-reset first: hold IoT 5 s), or
+   enter a key you already have.
+
+### If it pairs and then goes stale every few seconds
+
+That is the missing identity, not a range problem. Open **Options** on the entry
+and either fetch the values from your cloud account or enter them.
 
 ---
 

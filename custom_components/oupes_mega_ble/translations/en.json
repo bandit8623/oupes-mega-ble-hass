@@ -37,7 +37,7 @@
           "cloud_identity_not_bound": "Logged in, but this station is not in that account's device list, so its openId cannot be read from the cloud. Enter openId and userId manually, or re-bind the station to this account in the official app and try again. (A station that has been unbound from the cloud keeps working over Bluetooth with the identity it already holds.)",
           "cloud_identity_no_open_id": "Found the station in that account, but the record carries no usable openId. Enter openId and userId manually instead."
         },
-        "description": "Your Cleanergy email and password are **not saved anywhere.** They are sent to the vendor once, to look up openId and userId, and then dropped — this integration stores only the values it reads back. Omit them and nothing changes except that you type those two values yourself.\n\nNote that the vendor API is plain HTTP with no HTTPS endpoint, so the credentials cross the network unencrypted, exactly as they do in the official app."
+        "description": "Your Cleanergy email and password are **not saved anywhere.** They are sent to the vendor once, to look up openId and userId, and then dropped — this integration stores only the values it reads back. Omit them and nothing changes except that you type those two values yourself.\n\nNote that the vendor API is plain HTTP with no HTTPS endpoint, so the credentials cross the network unencrypted, exactly as they do in the official app.\n\nThe identity stored here was {identity_source}."
       }
     }
   },
@@ -105,6 +105,13 @@
           "cloud_email": "The email address you use to log in to the Cleanergy app.",
           "cloud_password": "Used to fetch this station's device key once, and not saved by this integration — only the device key it retrieves is kept. The vendor API is plain HTTP with no HTTPS endpoint, so the password crosses the network unencrypted, as it does in the official app.",
           "go_back": "Check this and click Submit to return to the method selection screen."
+        },
+        "error": {
+          "cloud_login_failed": "Cloud login failed. Check the email and password, and make sure this is the account the station was added to.",
+          "cloud_identity_login_failed": "Could not sign in to the OUPES / Cleanergy cloud. Check the email and password, then try again.",
+          "cloud_identity_not_bound": "Signed in, but this station is not in that account's device list, so its openId cannot be read. Add it in the Cleanergy app first and try again - or go back and enter openId and userId manually.",
+          "cloud_identity_no_open_id": "Found the station in that account but its record carries no openId. Try again in a moment, or go back and enter openId and userId manually.",
+          "cloud_identity_no_user_id": "Signed in but the account id was missing from the response. Try again, or enter openId and userId manually."
         }
       },
       "pairing": {
@@ -159,6 +166,34 @@
           "debug_attr_logging": "Log parsed attribute values with packet classification to a CSV in your HA config folder. Includes direction (TX/RX), command type, packet index, and parsed values.",
           "debug_raw_logging": "Log every raw BLE packet (TX and RX) with direction and command classification to a CSV in your HA config folder. Useful for diagnosing missing settings responses.",
           "go_back": "Check this and click Submit to return to the method selection screen."
+        }
+      },
+      "identity": {
+        "title": "Account identity",
+        "description": "The {name} family (Guardian / D5 V2) puts your account identity inside the Bluetooth authentication frame, so the station cannot be used without it. Home Assistant could not recover it from your OUPES / Cleanergy cloud account, usually because the station is not currently added to that account. Easiest fix: go back, add the station in the Cleanergy app first, and fetch it automatically. Otherwise enter the two values below, read from the device record of the account the station belongs to.",
+        "data": {
+          "open_id": "openId",
+          "user_id": "userId"
+        },
+        "data_description": {
+          "open_id": "The station's openId as stored in its cloud device record - up to 32 characters. It is not the Bluetooth pairing code and not the device key.",
+          "user_id": "The numeric account id the station belongs to (0 for a Mega station)."
+        },
+        "error": {
+          "required": "Enter the openId, or go back and add the station in the app first.",
+          "invalid_open_id": "openId must be at most 32 characters - it is written into a fixed-size field of the authentication packet.",
+          "invalid_user_id": "userId must be a positive whole number."
+        }
+      },
+      "local_claim": {
+        "title": "Claim without a cloud account",
+        "description": "{name} will be claimed with an identity generated here on your machine: a device key, an openId and an account id, all written into the station over Bluetooth. Nothing is sent to OUPES / Cleanergy, no account or password is needed, and the station works with no internet at all.\n\nThis only works on a **factory-reset** station - hold the IoT button for 5 seconds until it flashes rapidly. A station still bound to an app rejects it, because it already stores someone else's identity; use the Cleanergy cloud method for those.\n\nBefore you continue, understand what this costs: these values exist only in Home Assistant and cannot be looked up in the vendor cloud, and if the official app binds this station later it overwrites them. Undoing it means factory-resetting the station and adding it in the app.",
+        "data": {
+          "confirm_local_claim": "This station is factory-reset, and I accept that the official app will no longer control it",
+          "go_back": "Go back"
+        },
+        "error": {
+          "confirm_required": "Tick the box to confirm the station is factory-reset."
         }
       }
     },

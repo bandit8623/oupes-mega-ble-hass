@@ -40,6 +40,16 @@ CONF_DEVICE_KEY = "device_key"
 CONF_OPEN_ID = "open_id"
 CONF_USER_ID = "user_id"
 
+# Where the stored identity came from: "local" (minted here, no cloud account),
+# "cloud" (read from the vendor device record) or "manual" (typed in). A minted
+# openId is indistinguishable from a vendor-assigned one by inspection - same
+# length, same alphabet - so provenance has to be recorded rather than inferred.
+# It is what lets the UI explain why a station is missing from a cloud account.
+CONF_IDENTITY_SOURCE = "identity_source"
+IDENTITY_SOURCE_LOCAL = "local"
+IDENTITY_SOURCE_CLOUD = "cloud"
+IDENTITY_SOURCE_MANUAL = "manual"
+
 # Config entry options key - whether to hold the BLE connection open permanently
 # instead of polling every UPDATE_INTERVAL seconds.
 CONF_CONTINUOUS = "continuous_connection"
