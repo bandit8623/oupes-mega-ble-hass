@@ -56,6 +56,7 @@ from .const import (
     DOMAIN,
     STALE_TIMEOUT,
     UPDATE_INTERVAL,
+    series_from_product_id,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -74,6 +75,21 @@ def _valid_device_key(key: str) -> bool:
 def _generate_device_key() -> str:
     """Generate a random 10-character hex device key."""
     return secrets.token_hex(5)
+
+
+def _default_entry_name(local_name: str | None, product_id: str | None) -> str:
+    """Friendly default name for a station being added.
+
+    Stations advertise only a family tag - "TT" for the Mega line, "WP" for the
+    Guardian / D5 V2 line - and using that tag verbatim would title a device
+    "WP". An advertisement carrying a real name keeps it.
+    """
+    tag = (local_name or "").strip().upper()
+    if tag.startswith("WP") or series_from_product_id(product_id) == "guardian":
+        return "OUPES Guardian"
+    if tag.startswith("TT"):
+        return "OUPES Mega"
+    return (local_name or "").strip() or "OUPES Power Station"
 
 
 def _extract_device_id(manufacturer_data: dict[int, bytes]) -> str | None:
@@ -162,14 +178,14 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_bluetooth(
         self, discovery_info: BluetoothServiceInfo
     ) -> FlowResult:
-        """Invoked when HA discovers a 'TT' BLE advertisement."""
+        """Invoked when HA discovers a 'TT' or 'WP' BLE advertisement."""
         await self.async_set_unique_id(discovery_info.address)
         self._abort_if_unique_id_configured()
 
         self._address = discovery_info.address
-        self._name = discovery_info.name or "OUPES Mega"
         self._device_id = _extract_device_id(discovery_info.manufacturer_data)
         self._product_id = _extract_product_id(discovery_info.manufacturer_data)
+        self._name = _default_entry_name(discovery_info.name, self._product_id)
 
         self.context["title_placeholders"] = {
             "name": self._name,
@@ -205,7 +221,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             address = user_input[CONF_ADDRESS].upper().strip()
-            name = (user_input.get(CONF_NAME) or "OUPES Mega").strip()
+            name = (user_input.get(CONF_NAME) or "OUPES Power Station").strip()
 
             parts = address.split(":")
             if len(parts) != 6 or not all(len(p) == 2 for p in parts):
@@ -233,7 +249,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_ADDRESS, default=suggested_address): str,
-                    vol.Optional(CONF_NAME, default="OUPES Mega"): str,
+                    vol.Optional(CONF_NAME, default="OUPES Power Station"): str,
                 }
             ),
             errors=errors,
@@ -564,7 +580,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             or ""
         )
         current_address = entry.data.get(CONF_ADDRESS, "")
-        current_name = entry.data.get(CONF_NAME, "OUPES Mega")
+        current_name = entry.data.get(CONF_NAME, "OUPES Power Station")
 
         if user_input is not None:
             address = user_input.get(CONF_ADDRESS, "").upper().strip()

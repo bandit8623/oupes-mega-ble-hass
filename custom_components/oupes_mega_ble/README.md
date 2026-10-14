@@ -1,8 +1,11 @@
-# OUPES Mega — Home Assistant Custom Integration
+# OUPES Guardian 6000 V2 & Mega — Home Assistant Custom Integration
 
-A local Bluetooth (BLE) integration for **OUPES Mega** power stations.
-Connects via BLE (continuous or polled) and exposes sensors, binary sensors,
-toggle switches, and writable device settings — all with no cloud dependency.
+A local Bluetooth (BLE) integration for **OUPES Guardian** and **OUPES Mega**
+power stations. Connects via BLE (continuous or polled) and exposes sensors,
+binary sensors, toggle switches, and writable device settings — all with no cloud
+dependency. This build is labelled for and tested on the **Guardian 6000 V2**;
+see [Guardian / D5 V2 stations](#guardian--d5-v2-stations-ble-name-wp) for what
+those units additionally need (a cloud openId/userId) and how they differ.
 
 ---
 

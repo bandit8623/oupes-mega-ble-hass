@@ -1,17 +1,17 @@
 {
   "domain": "oupes_mega_ble",
-  "name": "OUPES Power Station BLE",
+  "name": "OUPES Guardian 6000 V2 BLE",
   "bluetooth": [
     {"local_name": "TT"},
     {"local_name": "WP"}
   ],
-  "codeowners": ["@acalcutt", "@HeedfulCrayon"],
+  "codeowners": ["@bandit8623"],
   "config_flow": true,
   "dependencies": ["bluetooth"],
-  "documentation": "https://github.com/acalcutt/oupes-mega-ble-hass/blob/main/custom_components/oupes_mega_ble/README.md",
+  "documentation": "https://github.com/bandit8623/oupes-mega-ble-hass/blob/release/custom_components/oupes_mega_ble/README.md",
   "integration_type": "device",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/acalcutt/oupes-mega-ble-hass/issues",
+  "issue_tracker": "https://github.com/bandit8623/oupes-mega-ble-hass/issues",
   "requirements": [],
-  "version": "1.2.0"
+  "version": "1.3.0"
 }

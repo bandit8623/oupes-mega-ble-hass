@@ -1,14 +1,65 @@
-# OUPES Mega BLE — Home Assistant Integration
+# OUPES Guardian 6000 V2 & Mega BLE — Home Assistant Integration
 
-Custom Home Assistant integration for **OUPES Mega** power stations over
-**Bluetooth (BLE)** — fully local, no cloud dependency required.
+Custom Home Assistant integration for **OUPES Guardian** and **OUPES Mega**
+power stations over **Bluetooth (BLE)** — fully local, no cloud dependency
+required. This build is maintained and tested against the
+**Guardian 6000 V2**.
 
-> The **WiFi** integration now lives in its own repository:
+> **About this repository.** This is a maintained fork of
+> [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
+> (MIT, © Andrew Calcutt), which carries the original license and copyright
+> unchanged. It is labelled for and maintained against the
+> **Guardian 6000 V2** (`D5 V2`, BLE name `WP`, product ID `95haDY`) — the model
+> it is tested on — and ships that support in tagged releases rather than from a
+> floating branch. Mega, Exodus and LP stations keep working as upstream has them
+> (same integration domain, `custom_components/oupes_mega_ble`, so this is a
+> drop-in replacement rather than a second integration), but they are not the
+> model this fork is verified against.
+>
+> See [Provenance and changelog](#provenance-and-changelog) for exactly what
+> differs, and
+> [`pull/13`](https://github.com/acalcutt/oupes-mega-ble-hass/pull/13) for the
+> upstream pull request; if that merges, this fork becomes redundant and the
+> upstream repo should be preferred.
+
+> The **WiFi** integration lives in its own repository:
 > [acalcutt/oupes-mega-wifi-hass](https://github.com/acalcutt/oupes-mega-wifi-hass).
-> HACS requires one integration per repository, so the two halves of this
+> HACS requires one integration per repository, so the two halves of that
 > project were split. The BLE and WiFi integrations can still run side by side —
 > they use independent communication channels and create separate device and
 > entity sets.
+
+---
+
+## Provenance and changelog
+
+**Derived from** [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
+(MIT). The BLE protocol reverse engineering this build stands on is the upstream
+authors' work — `@acalcutt` and `@HeedfulCrayon` are both listed as code owners
+upstream for that reason. Anything in the protocol documentation that pre-dates
+v1.3.0 is theirs; the differences below are ours.
+
+### v1.3.0 (this release, based on upstream 1.2.0 / `266d14b`)
+
+- **Guardian / D5 V2 (`WP`) stations can be added at all** — `WP` added to the
+  advertisement filter, which previously made HA discard these devices before
+  the config flow ever saw them.
+- **AUTH with the owner's cloud identity**, as those stations require: a
+  `0xA8`-long config-net-info frame carrying openId and userId, with the empty
+  SSID field padded `0x01`. The identity is entered in the integration options.
+- **Packed TLV telemetry** (`[0x02][0x05][dpid][uint32 LE]`, prefix `0x03`,
+  entries straddling packet boundaries) decoded by a dedicated reader, with the
+  existing parsers left as the fallback path.
+- **Attr 23 unpacked** into per-input DC power, behind a guard that leaves other
+  models' wattage readings untouched.
+- **Expansion Battery Count** derived from reported slots on units that never
+  answer dpid 51 unless queried.
+- **Tests** (`tests/test_protocol_wp.py`) and a protocol reference for the `WP`
+  variant in [`debug_info/README.md`](debug_info/README.md), including a test
+  asserting a TT station's init sequence stays byte-for-byte identical.
+
+Not present upstream, and not claimed here: the Mega, Exodus and LP families
+were not re-tested on hardware — the `TT` path is defended by tests instead.
 
 ---
 
@@ -75,7 +126,7 @@ setup.
 |--------|--------|
 | **Mega** | Mega 1, Mega 2, Mega 3, Mega 5 |
 | **Exodus** | Exodus 1200, Exodus 1500, Exodus 2400, S024 Lite, S1 Lite |
-| **Guardian** | Guardian 6000, HP2500, D5 V2 |
+| **Guardian** | **Guardian 6000 V2** ← maintained & tested here, Guardian 6000, HP2500, D5 V2 |
 | **Other** | S2 V2, DC 800, LP350, LP700, PB300, UPS 1200, UPS 1800 |
 
 Model-specific features (settings, entity names) are applied automatically
@@ -119,4 +170,5 @@ The [`debug_info/`](debug_info/) directory contains standalone tools:
 
 ## License
 
-See [LICENSE](LICENSE).
+MIT — see [LICENSE](LICENSE) for the original copyright notice, which this fork
+retains unmodified. Contributions here are offered under the same terms.
