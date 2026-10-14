@@ -177,13 +177,19 @@ def test_resolve_not_bound_matches_the_live_unbound_case():
     assert identity.user_id == 4242        # account id still known
 
 
-def test_resolve_no_open_id_when_record_lacks_identity():
+def test_resolve_succeeds_without_open_id_because_the_station_ignores_it():
+    # The vendor's email-and-password API has never returned the openId this
+    # station was paired with, so demanding one failed setups that would have
+    # worked. Measured on a Guardian 6000 V2: real key and real userId with the
+    # openId field zero-filled -> accepted, 43 telemetry frames; the same frame
+    # with a foreign userId -> refused. "WP" in that field is a family tag, so it
+    # is still never passed through as an identity.
     identity = resolve_identity(
         LOGIN_INFO, [device_record(openId="WP")], device_id=DEVICE_ID, mac_address=MAC
     )
-    assert not identity.ok
-    assert identity.reason == REASON_NO_OPEN_ID
-    assert not identity.open_id  # "WP" is a family tag, never a usable identity
+    assert identity.ok, identity.reason
+    assert not identity.open_id
+    assert identity.user_id == 4242
 
 
 def test_resolve_falls_back_to_account_level_open_id():
@@ -293,14 +299,15 @@ def test_resolve_accepts_identity_from_another_endpoint():
     assert identity.ok, identity.reason
 
 
-def test_resolve_reports_missing_open_id_from_extra_sources_too():
+def test_resolve_still_succeeds_when_only_sources_hold_a_family_tag():
     identity = resolve_identity(
         LOGIN_INFO,
         [device_record(openId=None)],
         device_id=DEVICE_ID,
         extra_sources=[{"home": {"openId": "WP"}}],
     )
-    assert identity.reason == REASON_NO_OPEN_ID
+    assert identity.reason == REASON_OK
+    assert not identity.open_id
 
 
 def test_list_shaped_device_info_response_is_searched():
