@@ -1,0 +1,110 @@
+name: "Station will not connect / drops after ~4 s"
+description: "Bluetooth pairs, then the link falls over — the common case on Guardian / D5 V2 (WP) stations"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before you file: **most "it will not stay connected" reports are a missing
+        openId/userId on a Guardian / D5 V2 station.** Open
+        *Settings → Devices & Services → OUPES → Configure* and check both fields
+        are filled with values from the account the station is bound to. The
+        integration logs a warning at startup when it sees a WP station without them.
+
+  - type: markdown
+    attributes:
+      value: |
+        ## Do not post secrets
+        Please redact your **device key**, **openId**, **userId**, Home Assistant
+        access tokens, and any CSV produced by `debug_raw_logging` — that file
+        contains the AUTH frame, which carries your openId/userId. MAC addresses are
+        fine to post if you need to, but they are not required here.
+
+  - type: dropdown
+    id: ble_name
+    attributes:
+      label: What BLE name does the station advertise?
+      description: >
+        Shown in Settings → Devices & Services → Bluetooth, or in the discovery
+        card. This decides which protocol variant applies.
+      options:
+        - "TT (Mega family)"
+        - "WP (Guardian / D5 V2)"
+        - "Something else / not sure"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model and firmware
+      description: e.g. "Guardian 6000 V2", "Mega 1", "Exodus PV1". Product ID if you know it.
+      placeholder: Guardian 6000 V2 (product ID 95haDY)
+    validations:
+      required: true
+
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Home Assistant version, this integration's version, and how you installed it (HACS / manual).
+      placeholder: "HA Core 2026.10.1 on HAOS 18.3, integration 1.3.0 via HACS"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: identity
+    attributes:
+      label: On a WP station — are openId and userId both set in the integration options?
+      options:
+        - "Yes, both set, from the account the station belongs to"
+        - "No / not sure"
+        - "Not applicable (TT station)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: bluetooth_path
+    attributes:
+      label: How does Home Assistant reach Bluetooth?
+      options:
+        - "A Bluetooth adapter in/near the HA host"
+        - "ESPHome Bluetooth proxy"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_happens
+    attributes:
+      label: What happens, step by step
+      description: >
+        Include whether the IoT/WiFi button was pressed, whether the station was
+        already bound to the vendor app, and roughly how long the connection lasts.
+      placeholder: |
+        1. Pressed IoT button, indicator flashing
+        2. Discovery card appeared, entered MAC and key
+        3. Entities came up as unavailable after ~4 s, log fills with ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines
+      description: >
+        Settings → System → Logs, search for `oupes`. Paste only the relevant lines,
+        with any key-like strings replaced by `‹redacted›`.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmation
+      options:
+        - label: I redacted device keys, openId, userId and tokens from everything above
+          required: true
+        - label: The station is within a few metres of the adapter or proxy, with no other client (phone app) connected to it
+          required: true

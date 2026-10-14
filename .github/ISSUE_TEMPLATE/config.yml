@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security issue privately
+    url: https://github.com/bandit8623/oupes-mega-ble-hass/security/advisories/new
+    about: >
+      Device keys and openId/userId are the Bluetooth authentication material for
+      your station. Do not post them in an issue - use a private advisory.
+  - name: Upstream integration (Mega, Exodus, LP)
+    url: https://github.com/acalcutt/oupes-mega-ble-hass/issues
+    about: >
+      Issues with the original integration as published by its author, rather than
+      this fork's releases, belong upstream.

@@ -1,0 +1,64 @@
+name: "A sensor reports the wrong number"
+description: "Entity exists and updates, but the value is implausible"
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Two known gotchas, both fixed in 1.3.0 — check these before filing:
+
+        - **Solar Input Power in the tens of millions of watts** → attribute 23 was
+          decoded as one uint32 instead of two uint16 watt halves. Update to 1.3.0.
+        - **Expansion Battery Count is 0 with packs attached** → the station does not
+          answer that field unless polled; 1.3.0 derives it from populated slots.
+
+  - type: input
+    id: entity
+    attributes:
+      label: Which entity, and what does it report vs what you expect?
+      description: One entity per issue, please — it keeps the diagnosis tractable.
+      placeholder: "sensor.…_total_input_power reads 131072000 W; should be ~1100 W"
+    validations:
+      required: true
+
+  - type: input
+    id: model
+    attributes:
+      label: Model, BLE name and integration version
+      placeholder: "Guardian 6000 V2 (WP), 1.3.0"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: What the station was actually doing at the time
+      description: >
+        Actual load, what was charging, number of battery packs, whether AC input or
+        generator was connected. A "wrong" value is often a real reading from a
+        different input.
+      placeholder: |
+        Two DC inputs at ~550 W each, ~900 W AC out, two expansion packs, grid offline.
+    validations:
+      required: true
+
+  - type: textarea
+    id: attributes
+    attributes:
+      label: Entity attributes
+      description: >
+        Developer tools → States → pick the entity, then paste the attribute block.
+        It contains no secrets.
+      render: yaml
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmation
+      options:
+        - label: I am on the latest release of this fork
+          required: true
+        - label: The value is stable-but-wrong, not just unknown/unavailable for a while
+          required: true

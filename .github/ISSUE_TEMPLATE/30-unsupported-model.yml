@@ -1,0 +1,62 @@
+name: "My station is not supported / entities are missing"
+description: "A model or firmware variant this fork has not been matched yet"
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Support is keyed off the **product ID** the station broadcasts, so most of
+        what is needed is a capture of the advertisement plus the telemetry shape.
+        Everything is welcome, but remember this fork is verified on a Guardian
+        6000 V2 only — a new model is genuinely new work, not a config toggle.
+
+  - type: input
+    id: model
+    attributes:
+      label: Model as sold
+      placeholder: "Guardian 6000 (not V2), Mega 1, Exodus PV1, ..."
+    validations:
+      required: true
+
+  - type: input
+    id: product_id
+    attributes:
+      label: Product ID and BLE advertised name
+      description: >
+        Product ID is the 6-character ASCII string in the manufacturer data; it also
+        appears in the Bluetooth discovery card and in the integration log at startup.
+      placeholder: "95haDY, advertised as WP"
+    validations:
+      required: true
+
+  - type: textarea
+    id: behaviour
+    attributes:
+      label: What happens today
+      description: Not discovered at all / discovers but AUTH fails / connects but half the entities stay unknown.
+      placeholder: |
+        Discovered as WP, connects, ~20 entities populate, the rest stay unknown forever.
+    validations:
+      required: true
+
+  - type: textarea
+    id: capture
+    attributes:
+      label: Advertisement / telemetry capture (optional but decisive)
+      description: >
+        If you can, paste a short excerpt of the raw notifications. Turn
+        `debug_raw_logging` off again afterwards and delete any AUTH (`a8`) rows —
+        they carry your openId and userId.
+      render: text
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Confirmation
+      options:
+        - label: Any capture above has had AUTH rows removed
+          required: true
+        - label: I understand this model is not covered by the tests in tests/, so it may need iteration
+          required: true

@@ -84,14 +84,54 @@ device over BLE and exposes sensors, switches, and settings entities.
 
 1. Open **HACS → Integrations**.
 2. Open the three-dot menu and select **Custom repositories**.
-3. Enter `https://github.com/acalcutt/oupes-mega-ble-hass`.
-4. Select **Integration**, click **Add**, and install **OUPES Mega BLE**.
-5. Restart Home Assistant.
+3. Enter `https://github.com/bandit8623/oupes-mega-ble-hass`.
+4. Select **Integration**, click **Add**, and install **OUPES Guardian 6000 V2 BLE**.
+5. Restart Home Assistant — required, HACS only swaps the files on disk.
+6. **Guardian / D5 V2 stations only:** go to **Settings → Devices & Services →
+   OUPES Guardian 6000 V2 BLE → Configure** and enter your **openId** and
+   **userId** ([how to find them](custom_components/oupes_mega_ble/README.md#finding-your-openid-and-userid)).
+   Without them the station rejects AUTH and drops Bluetooth about four seconds
+   after each connect.
+
+Releases are tagged, so HACS installs a specific version rather than a moving
+branch. Installing over an existing copy of this integration is fine — the domain
+is unchanged, so entities and the config entry survive.
 
 ### Manual
 
 1. Copy `custom_components/oupes_mega_ble/` into your HA config directory.
 2. Restart Home Assistant.
+
+### Migrating from another copy of this integration
+
+If HACS already tracks `acalcutt/...` or `HeedfulCrayon/...`, the switch is:
+
+1. Add this repository as a custom repository and install it. It overwrites the
+   same `custom_components/oupes_mega_ble/` directory — expect the entities to go
+   unavailable for one restart.
+2. Restart Home Assistant.
+3. Enter openId/userId in the integration options if you are on a `WP` station.
+4. Check the entities are live again, then **untrack** the old repository so its
+   update entity cannot offer to overwrite these files.
+
+HACS distinguishes *untracking* a repository from *removing its files*. Removing
+the files deletes `custom_components/oupes_mega_ble/` while the integration is
+still loaded, so Home Assistant errors until you restart and reinstall. Do the
+untrack, not that.
+
+### Keeping HACS from overwriting local edits
+
+The `OUPES … Update` entity never installs anything by itself, but "Update all" on
+the dashboard will. If you patch these files by hand, either disable that update
+entity or point HACS at your own fork — otherwise the next "update" silently
+reverts your changes.
+
+### Upstream
+
+The protocol work is also submitted upstream as
+[acalcutt/oupes-mega-ble-hass#13](https://github.com/acalcutt/oupes-mega-ble-hass/pull/13).
+If it is ever merged, upstream wins and this fork becomes redundant — that is the
+intended outcome, not a rivalry.
 
 ## Quick Start
 
@@ -152,6 +192,7 @@ reverse-engineered protocol reference, covering:
 - Device firmware boot sequence
 
 ## Debug Tools
+
 
 The [`debug_info/`](debug_info/) directory contains standalone tools:
 
