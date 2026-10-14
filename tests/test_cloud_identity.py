@@ -14,6 +14,7 @@ failed login and is tested as such.
 """
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -302,6 +303,20 @@ def test_resolve_reports_missing_open_id_from_extra_sources_too():
     assert identity.reason == REASON_NO_OPEN_ID
 
 
+def test_list_shaped_device_info_response_is_searched():
+    # ``_extract_key`` has always accepted a list-shaped /device/info payload, but
+    # extract_open_id used to return None for anything that was not an object -
+    # so the same response was readable for a key and invisible for an identity.
+    assert extract_open_id([{"home": {"openId": OPEN_ID}}]) == OPEN_ID
+    identity = resolve_identity(
+        LOGIN_INFO,
+        [device_record(openId=None)],
+        device_id=DEVICE_ID,
+        extra_sources=[[{"openId": OPEN_ID}]],
+    )
+    assert identity.ok, identity.reason
+
+
 def test_describe_key_paths_is_names_only():
     secret = "oG1PjSECRETneverlogme"
     paths = describe_key_paths({"home": {"openId": secret}, "bind": [{"sn": "S1"}]})
@@ -319,6 +334,53 @@ def test_describe_key_paths_covers_everything_the_warning_claims():
     paths = describe_key_paths(record)
     for expected in ("device_key", "mac_address", "home", "home.owner", "home.owner.openId"):
         assert expected in paths
+
+
+def test_extract_open_id_from_stringified_json_blob():
+    # /device/info exposes detail.config, and vendor config fields like this are
+    # routinely a JSON document inside a string. An openId in there was invisible
+    # to a walk that treated every string as a leaf.
+    blob = json.dumps({"owner": {"openId": OPEN_ID}})
+    assert extract_open_id({"detail": {"config": blob}}) == OPEN_ID
+
+
+def test_extract_open_id_from_top_level_json_string():
+    assert extract_open_id([json.dumps({"openId": OPEN_ID})]) == OPEN_ID
+
+
+def test_malformed_json_string_does_not_raise_or_match():
+    assert extract_open_id({"detail": {"config": '{"openId": '}}) is None
+    assert extract_open_id({"detail": {"config": "{not json at all}"}}) is None
+
+
+def test_plain_strings_are_not_parsed():
+    # "WP" and titles must stay leaves; parsing everything that looks faintly
+    # structured is how a walk ends up inventing structure that is not there.
+    assert extract_open_id({"title": "openId", "name": "WP"}) is None
+
+
+def test_json_blob_depth_still_bounded():
+    inner = json.dumps({"openId": OPEN_ID})
+    node: dict = {"next": json.loads(inner)}
+    for _ in range(6):
+        node = {"next": node}
+    assert extract_open_id(node) is None
+
+
+def test_describe_key_paths_marks_parsed_blobs():
+    paths = describe_key_paths({"detail": {"config": json.dumps({"openId": OPEN_ID})}})
+    assert "detail.config~json" in paths
+    assert "detail.config~json.openId" in paths
+    assert OPEN_ID not in " ".join(paths)
+
+
+def test_describe_key_paths_distinguishes_empty_from_unexamined():
+    # Without the marker, "config had nothing in it" and "we never looked inside
+    # config" produce the same report, and the second reading would have sent
+    # this investigation down exactly the wrong path.
+    paths = describe_key_paths({"detail": {"config": "{}"}})
+    assert "detail.config" in paths
+    assert any(p.endswith("~json") for p in paths)
 
 
 if __name__ == "__main__":

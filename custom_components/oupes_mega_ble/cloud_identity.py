@@ -13,6 +13,7 @@ Everything that talks to the network lives in :mod:`.cloud_api`.
 """
 from __future__ import annotations
 
+import json
 import logging
 import re
 
@@ -131,15 +132,42 @@ def _usable_open_id(value: Any) -> str | None:
     return None
 
 
+def _maybe_json(value: Any) -> Any:
+    """Parse a string that is itself a JSON document, else return it unchanged.
+
+    Vendor config fields arrive as stringified JSON inside an otherwise normal
+    object - ``/device/info`` exposes ``detail.config``, and a recursive walk that
+    treats every string as a leaf cannot see an identity filed inside one. Only
+    cheap, obvious candidates are attempted, so ordinary strings cost nothing and
+    a malformed blob cannot raise.
+    """
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if len(text) < 2 or len(text) > 65536 or text[0] not in "{[":
+        return None
+    try:
+        parsed = json.loads(text)
+    except (ValueError, TypeError):
+        return None
+    return parsed if isinstance(parsed, (Mapping, list)) else None
+
+
 def _mappings_in(
     obj: Any, depth: int = 0
 ):
     """Yield *obj* and every mapping nested inside it, to *_MAX_SEARCH_DEPTH*.
 
     Lists are traversed too: the vendor returns device collections, and an owner
-    object reached through one is no less the owner.
+    object reached through one is no less the owner. Strings that are themselves
+    JSON documents are parsed and descended into - see :func:`_maybe_json`.
     """
     if depth > _MAX_SEARCH_DEPTH:
+        return
+    if isinstance(obj, str):
+        unpacked = _maybe_json(obj)
+        if unpacked is not None:
+            yield from _mappings_in(unpacked, depth + 1)
         return
     if isinstance(obj, Mapping):
         yield obj
@@ -163,6 +191,15 @@ def describe_key_paths(obj: Any, max_paths: int = 80) -> list[str]:
     def walk(node: Any, prefix: str, depth: int) -> None:
         if depth > _MAX_SEARCH_DEPTH or len(paths) >= max_paths:
             return
+        if isinstance(node, str):
+            unpacked = _maybe_json(node)
+            if unpacked is not None:
+                # Marked so a reader can tell "this blob was opened" from "this
+                # blob was empty" - the difference between an answer and a gap.
+                base = prefix.rstrip(".")
+                paths.append(f"{base}~json")
+                walk(unpacked, f"{base}~json.", depth + 1)
+            return
         if isinstance(node, Mapping):
             for key, value in node.items():
                 path = f"{prefix}{key}"
@@ -182,13 +219,16 @@ def extract_open_id(record: Mapping[str, Any] | None) -> str | None:
     on the exact record the caller handed over, then any key whose name contains
     ``openId`` in any casing, then the same descent into nested objects.
     """
-    if not isinstance(record, Mapping):
+    if not isinstance(record, (Mapping, list, tuple, str)):
         return None
     mappings = list(_mappings_in(record))
     # Known spellings on the record itself first, then anywhere by name shape.
-    for source in mappings[:1]:
+    # Only when the record is itself an object: for a list-shaped response there
+    # is no "its own" level, and /device/info has been seen to return a list, so
+    # rejecting one here would silently skip a payload the key lookup accepts.
+    if isinstance(record, Mapping):
         for key in _OPEN_ID_KEYS:
-            found = _usable_open_id(source.get(key))
+            found = _usable_open_id(record.get(key))
             if found:
                 return found
     for source in mappings:

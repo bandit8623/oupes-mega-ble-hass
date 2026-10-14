@@ -23,6 +23,16 @@ This fork tracks
   failure warning now lists dotted field *paths* instead of flat key lists, for
   every endpoint searched.
 
+- **Identity search now opens JSON documents hidden inside strings, and accepts
+  list-shaped responses.** `/device/info` exposes `detail.config`; a walk that
+  treats every string as a leaf cannot see an identity filed inside such a blob,
+  and stringified JSON is how vendor config fields usually arrive. Separately,
+  `extract_open_id` returned `None` for any response that was not an object while
+  the key extractor beside it has always accepted a list — so the same payload
+  was readable for a device key and invisible for an account identity. The field
+  report marks opened blobs (`detail.config~json`) so "was empty" and "was never
+  examined" are no longer the same line.
+
 ### Measured and removed
 
 - **"Claim with a local identity" is no longer offered.** The premise was that a
