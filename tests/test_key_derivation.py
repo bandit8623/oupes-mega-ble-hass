@@ -1,14 +1,21 @@
-"""The binding key is md5(account number)[:10], measured rather than assumed.
+"""The binding key is md5(account number)[:10].
 
-Two of these vectors came off a real Guardian 6000 V2 rather than out of the
-algorithm, which is the point: `9256f177e0` is the key the station accepted and
-streamed 43 telemetry frames for, and `08716ddaff` is the correct key for an
-account number nobody ever paired, which the station refused. If a refactor
-changes the hash, the padding or the case, those two stop agreeing and this fails
-before someone's setup does on a live station.
+This was established two ways: read out of the vendor's own APK, where
+``KeyUtils.createDeviceKey()`` is ``encodeMD5(NetApi.getUserId()).substring(0, 10)``,
+and confirmed against a live Guardian 6000 V2, which streamed 43 telemetry frames for
+the derived key and refused an account number nobody had ever paired - even though that
+second account number carried a arithmetically correct key of its own, which is also why
+the station is checked against a stored pair rather than recomputing.
 
-The algorithm's source is the Cleanergy APK's ``KeyUtils.createDeviceKey()``,
-which is ``encodeMD5(NetApi.getUserId()).substring(0, 10)``.
+The literals below are a SYNTHETIC account number and its hash, not the pair that was
+measured. The measured pair is deliberately written down nowhere in this repository:
+the key is nine characters of MD5 over the account number, so publishing an account
+number publishes that station's Bluetooth credential, and the account number is
+simultaneously an identifier for somebody's vendor account. A test must not be able to
+leak either one.
+
+If a refactor changes the hash, the truncation or the case, this fails here rather than
+on someone's live station.
 """
 
 from __future__ import annotations

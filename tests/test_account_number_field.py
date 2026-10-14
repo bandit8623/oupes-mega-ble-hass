@@ -10,7 +10,9 @@ source and executed on its own - which also means the test fails loudly if the
 function ever grows a Home Assistant dependency, rather than silently skipping.
 
 The case that motivated this: the step's NumberSelector delivers ``24680.0``, and
-``int("24680.0")`` raises. A valid account number was rejected on the first try.
+``int("24680.0")`` raises. A valid account number was rejected on the first try, on a
+real station, on the first attempt at setup. The account number here is illustrative;
+the float is the bug.
 """
 
 import pathlib
