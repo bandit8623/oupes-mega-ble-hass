@@ -10,6 +10,36 @@ This fork tracks
 
 ## Unreleased
 
+### Measured and removed
+
+- **"Claim with a local identity" is no longer offered.** The premise was that a
+  factory-reset station accepts any well-formed identity, because that is how the
+  official app binds one. Tested on a Guardian 6000 V2 on 2026-10-14: two factory
+  resets, each followed immediately by a claim with the minted identity confirmed
+  present in the AUTH frame, both timed out with the claim uncompleted. The same
+  frame carrying the real cloud identity is accepted by the same station, so the
+  identity is the single variable that decides it, and the station checks it. The
+  module, its tests and the plumbing around it stay, so this is revisitable by
+  whoever reverses what the station actually verifies; the menu stops inviting
+  people to spend a factory reset finding out.
+- **Method order was inverted for the family that needs it most.** "Create a new
+  device key" led, and on a `WP` station that option cannot finish without an
+  identity sourced elsewhere first. Cloud recovery now leads for Guardian; the old
+  order is kept for `TT`, where generating a key genuinely is the short route.
+- **A failed pairing handed the user a different screen than the one they were on.**
+  Failure routing was hardcoded to the create-key form, so a local-claim timeout
+  rendered under a heading reading "Create New Device Key", with instructions for a
+  procedure that had not just been attempted. It now returns to whichever method
+  started the pairing.
+- **Pairing instructions omitted the two things that actually break it.** The form
+  now says to switch the phone's Bluetooth off first, and says out loud that a
+  successful claim overwrites the key the app stored, so Cleanergy stops reporting
+  the station until it is re-added.
+- **Version bumped to `1.4.0.dev0`.** Home Assistant's frontend caches an
+  integration's translations keyed by manifest version, so every dev build shipped
+  under `1.3.0` left users reading strings from the original release - observed
+  directly, two releases of wording changes after those strings were merged.
+
 ### Fixed
 
 - **Fresh Guardian setups could not authenticate.** The setup flow ran the claim
