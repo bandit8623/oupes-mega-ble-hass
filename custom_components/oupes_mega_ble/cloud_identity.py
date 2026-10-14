@@ -55,7 +55,9 @@ REASON_NO_USER_ID = "no_user_id"
 class CloudIdentity:
     """Result of a cloud identity lookup.
 
-    ``ok`` is True only when both halves of the identity were recovered.
+    ``ok`` is True when an account number (userId) was recovered. The openId is
+    carried when the vendor happens to supply one, but is not required: the station
+    was measured to stream telemetry with that field zero-filled.
     Otherwise ``reason`` names the failure so the UI can explain it instead of
     showing a generic "login failed".
     """

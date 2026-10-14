@@ -267,11 +267,15 @@ Usual causes, in the order they actually happen:
 5. **Something else holds the connection.** Another HA entry, a phone sitting on
    Bluetooth, a laptop that paired earlier.
 
-Useful check: the integration exposes a diagnostic sensor whose counters say which of
-these you are hitting — frames sent, frames received, authentications accepted,
-pairings accepted. `received = 0` means the station never answered (asleep, too far, or
-wrong proxy). `received > 0` with `auth accepted = 0` means it heard you and refused the
-identity — which, if the station is bound, is exactly what it should do.
+What actually helps is the log. Turn on debug logging for the integration
+(`Settings → System → Logs`, or `logger:` in `configuration.yaml` with
+`custom_components.oupes_mega_ble: debug`) and read it against the table above:
+no frames at all means the station never answered; frames with no accepted
+authentication means it heard you and refused the identity.
+
+The integration's options also offer **Log raw frames** and **Log attributes**, which
+append to CSV files under the config directory. Reach for `raw` last: that file
+contains the AUTH frame, so it holds your account number in the clear.
 
 ---
 
@@ -280,11 +284,14 @@ identity — which, if the station is bound, is exactly what it should do.
 A Guardian 6000 V2 with two expansion batteries reports roughly 40 entities. The ones
 people ask about:
 
-* `dc_input_1_power`, `dc_input_2_power` — the two DC inputs are separate sensors on
-  these units; the shared "solar input" register mirrors their sum and is suppressed
-  when both inputs are present, so you do not see the same power counted twice.
-* `expansion_battery_count` — parsed at byte 79 of the battery report on WP frames,
-  which is a different offset than the Mega uses.
+* `dc_input_1_power`, `dc_input_2_power` — this family reports both DC inputs packed
+  into one 32-bit field (dpid 23): two 16-bit halves. The parser splits them and puts
+  their sum back where the aggregate was, so `solar_input_power` is the total of the
+  two rather than a third, double-counted reading.
+* `expansion_battery_count` — counted from the packs that actually reported telemetry
+  this cycle, not read from a register. The firmware is supposed to answer a pack
+  count on dpid 51 but does not on this model, so counting live slots is what works,
+  and the number follows hardware changes on its own: unplug a pack and it falls.
 * `main_unit_temperature` — the station reports in Fahrenheit; the integration converts.
 * `remaining_runtime` — reported in minutes and clamped; a value pinned at the
   configured maximum means the station is telling you "no meaningful estimate".
@@ -327,3 +334,41 @@ The two rules that cost the most time to learn, stated once more:
 > zero-filled, and the station streams anyway - measured, not inferred.
 > The device key is `md5(userId)[:10]`, always lower case, and
 > `derive_device_key()` is the only implementation the rest of the code may use.
+
+---
+
+## 12. How much of this is actually known
+
+Read this section before you tell someone else that their station will work.
+
+Everything above came from **one Guardian 6000 V2**, firmware 1.2.0, product id
+`95haDY`, one Cleanergy account, one phone, over about two weeks. That is a sample size
+of one, and it is stated rather than hidden because the alternative - writing it up as
+natural law - is how the openId myth survived as long as it did.
+
+| Claim | How it is known | Where it stops being safe |
+| --- | --- | --- |
+| Key is `md5(userId)[:10]` | Read out of the vendor's own APK (`KeyUtils.createDeviceKey`), then confirmed against the station | It is the *app's* generator, so it should hold for anything this app pairs. A different app, an old app version, or a station provisioned some other way could differ |
+| Station ignores the openId | One experiment: real key and userId, openId zero-filled, 43 telemetry frames back | One firmware version. An update could start checking it, and nothing here would predict that |
+| Station compares a **stored** pair, not a recomputed hash | Invented userId carrying its own correct `md5` was refused | One unit. It is the best explanation of the data, not a disassembly of the check |
+| Removing the station in the app wipes the pair | Observed directly | One unit. Firmware 1.2.0 also failed to unbind reliably in the other direction, which is the same experiment being flaky |
+| Frame layout, `WP_DEVICE_ID`, packed dpid 23 | APK plus wire observation | These are on the wire, so they are the most solid things here |
+| ~40 entities, DC input split, expansion count | Measured on a unit with two expansion packs | Your model may report different dpids. The integration degrades to "entity missing" rather than "value wrong", which is the safe direction |
+
+**Not tested at all, so treat as unknown:**
+
+* Every other `WP` model - the D5 6000 Plus and the other D5 V2 variants share the
+  family tag but were never touched here.
+* Any firmware other than 1.2.0.
+* More than one station on an account. The key is per-account, not per-station, so the
+  prediction is that a second station works the same way - a prediction, not a result.
+* What a firmware update does to the stored pair.
+* Stations bought second-hand, and whether the vendor will re-bind one to a new account.
+* Mega / `TT` stations, which are a different family and never needed any of this.
+
+If you get this working on a station that is not the one described above, that is a
+ datapoint nobody else has. Opening an issue with the model, firmware version and what
+you did takes two minutes and is the only way this table grows past one row. If it does
+**not** work, that is worth filing too - a wrong claim in these docs is worse than a
+missing one, and the openId chapter is the proof of that.
+

@@ -47,7 +47,25 @@ authors' work — `@acalcutt` and `@HeedfulCrayon` are both listed as code owner
 upstream for that reason. Anything in the protocol documentation that pre-dates
 v1.3.0 is theirs; the differences below are ours.
 
-### v1.3.0 (this release, based on upstream 1.2.0 / `266d14b`)
+### v1.4.0
+
+- **The account number is the whole credential.** The binding key is
+  `md5(account number)[:10]`, which is how the vendor's own APK generates it, so pairing
+  is one number rather than a captured key.
+- **The openId turned out not to be a requirement.** Measured: real key and account
+  number with that field zero-filled streams 43 telemetry frames; the same frame with a
+  wrong account number is refused. Everything in this project that insisted on an openId
+  was wrong, including a page that told people to capture one with a rooted phone.
+- **Never remove the station from the vendor app.** Removing it wipes the stored pair.
+  To hand the radio to the app, disable the HA entry instead - that was measured
+  end-to-end, including the return.
+- New pairing method **Use my Cleanergy account number**; cloud login derives the key.
+- A `WP` station that answers and hangs up now logs the reason instead of a `DEBUG` line
+  nobody reads.
+- Docs corrected where they were actively misleading, and a section added on which
+  claims rest on which evidence.
+
+### v1.3.0 (based on upstream 1.2.0 / `266d14b`)
 
 - **Guardian / D5 V2 (`WP`) stations can be added at all** — `WP` added to the
   advertisement filter, which previously made HA discard these devices before
@@ -279,10 +297,17 @@ Model-specific features (settings, entity names) are applied automatically
 based on the BLE product ID.
 
 > **Guardian / D5 V2 stations** (e.g. the Guardian 6000 V2) advertise the BLE name
-> **`WP`** rather than `TT`, and their AUTH frame must carry the **openId** and
-> **userId** of the Cleanergy account that owns the station — without both the
-> station rejects the connection and drops it after a few seconds. See
+> **`WP`** rather than `TT`, and they authenticate against the Cleanergy account the
+> station was paired with. You give the integration that **account number** and it
+> derives the key - see
 > [Guardian / D5 V2 stations](custom_components/oupes_mega_ble/README.md#guardian--d5-v2-stations-ble-name-wp).
+> Add the station in the vendor app first, and never remove it afterwards.
+>
+> **Scope of that claim:** everything about the `WP` family here was measured on a
+> single Guardian 6000 V2 running firmware 1.2.0. Other `WP` models and other firmware
+> are untested, not known-bad. See
+> [how much is actually known](docs/GUARDIAN-WP-BLE.md#12-how-much-of-this-is-actually-known)
+> and, if your station is not that one, please file the compatibility report.
 
 ---
 

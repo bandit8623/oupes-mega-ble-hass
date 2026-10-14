@@ -791,7 +791,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # -- Connection settings (final step before entry creation) ----------
 
     def _needs_identity(self) -> bool:
-        """Whether this station still needs an openId/userId before continuing.
+        """Whether this station still needs an account number before continuing.
 
         Guardian / D5 V2 stations put the account identity inside their AUTH
         frame, so without it the station answers and then drops Bluetooth a few

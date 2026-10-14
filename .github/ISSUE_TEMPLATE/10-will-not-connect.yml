@@ -5,20 +5,21 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before you file: **most "it will not stay connected" reports are a missing
-        openId/userId on a Guardian / D5 V2 station.** Open
-        *Settings → Devices & Services → OUPES → Configure* and check both fields
-        are filled with values from the account the station is bound to. The
-        integration logs a warning at startup when it sees a WP station without them.
+        Before you file: on a Guardian / D5 V2 (`WP`) station the usual cause is that
+        the **account number does not match the account the station is paired with**, or
+        the station was removed from the vendor app after pairing. Check
+        *Settings → Devices & Services → OUPES → Configure*. If Home Assistant logs
+        "connected and the station dropped the link immediately", that is the identity
+        being refused, not a range problem.
 
   - type: markdown
     attributes:
       value: |
         ## Do not post secrets
-        Please redact your **device key**, **openId**, **userId**, Home Assistant
-        access tokens, and any CSV produced by `debug_raw_logging` — that file
-        contains the AUTH frame, which carries your openId/userId. MAC addresses are
-        fine to post if you need to, but they are not required here.
+        Please redact your **device key**, **openId**, **account number (userId)**,
+        Home Assistant access tokens, and any CSV produced by `debug_raw_logging` —
+        that file contains the AUTH frame, which carries your account number. MAC
+        addresses are fine to post if you need to, but they are not required here.
 
   - type: dropdown
     id: ble_name
@@ -55,9 +56,12 @@ body:
   - type: dropdown
     id: identity
     attributes:
-      label: On a WP station — are openId and userId both set in the integration options?
+      label: On a WP station — is the account number set, and does it own the station?
+      description: >
+        The openId is not required; the station was measured to ignore it. What it checks
+        is the account number and the key derived from it.
       options:
-        - "Yes, both set, from the account the station belongs to"
+        - "Yes, account number is set and belongs to the account that paired the station"
         - "No / not sure"
         - "Not applicable (TT station)"
     validations:

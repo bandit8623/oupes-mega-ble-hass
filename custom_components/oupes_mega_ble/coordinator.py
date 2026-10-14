@@ -92,6 +92,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         self.open_id = open_id
         self.user_id = user_id
         self.model_name = model_name_from_product_id(product_id)
+        self.product_series = series_from_product_id(product_id)
         self.last_successful_poll: datetime | None = None
         self.stale_timeout = timedelta(minutes=stale_timeout_minutes)
         self._pending_command: bytes | None = None
@@ -104,16 +105,21 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         # Build Cmd2 query packets that read this device's supported settings.
         # Split into small batches (7 DPIDs each) matching the Cleanergy app.
         series = series_from_product_id(product_id)
-        if series == "guardian" and not (open_id and user_id):
-            # Guardian / D5 V2 stations refuse an AUTH frame that does not carry the
-            # owner's cloud identity: they answer 03 80 01 01 01 and drop the link
-            # about four seconds after connecting, which otherwise looks like a
-            # range or pairing problem.
+        if series == "guardian" and not user_id:
+            # A Guardian / D5 V2 answers an AUTH frame that carries no account
+            # identity at all, then drops the link about four seconds later - which
+            # otherwise reads as a range or pairing problem.
+            #
+            # The openId is deliberately not part of this test. On the unit this was
+            # measured on, the station streams telemetry with that field zero-filled
+            # and refuses the frame only when the userId is wrong, so warning about a
+            # missing openId sent people to capture a value the station never reads.
             _LOGGER.warning(
-                "%s (%s) is a Guardian / D5 V2 ('WP') station: it needs the cloud "
-                "openId and userId of the account that owns it. Open the "
-                "integration options and fill in both, otherwise the station will "
-                "reject the connection and drop it after a few seconds",
+                "%s (%s) is a Guardian / D5 V2 ('WP') station: it authenticates "
+                "against the account it was paired with in the Cleanergy app. Set the "
+                "account number during setup (or in the integration options), "
+                "otherwise the station will answer and then drop the link after a "
+                "few seconds",
                 name,
                 address,
             )
@@ -297,6 +303,24 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                 "Cold-probe drop on %s (attempt %d) — will retry",
                 self.address, attempt + 1,
             )
+            if self.product_series == "guardian" and attempt == MAX_ATTEMPTS - 1:
+                # A WP station that answers and then hangs up within a few seconds is
+                # the signature of an identity the station does not recognise. Only the
+                # account number and its derived key are checked; the openId is not,
+                # so this deliberately does not send people looking for one. Everything
+                # about this verdict comes from a single unit on firmware 1.2.0 - see
+                # docs/GUARDIAN-WP-BLE.md section 12 - so it names what to look at
+                # rather than declaring what is wrong.
+                _LOGGER.warning(
+                    "%s: connected %d times and each time the station dropped the link "
+                    "immediately. On a Guardian / D5 V2 this is what a rejected account "
+                    "identity looks like. The stored account number is %s and the key is "
+                    "derived from it; check they belong to the account the station was "
+                    "added with in the Cleanergy app, and that the station has not been "
+                    "removed from that app since pairing",
+                    self.device_name or self.address, MAX_ATTEMPTS,
+                    self.user_id if self.user_id else "not set",
+                )
 
         raise last_exc or UpdateFailed(
             f"Device {self.address} failed to provide data after "

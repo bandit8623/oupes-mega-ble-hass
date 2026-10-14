@@ -1,0 +1,124 @@
+name: "Compatibility report - does the derived key work on my station?"
+description: "One station per report. This is how the verified-models table grows beyond the single unit it came from."
+labels: ["compatibility"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Setup on the Guardian / D5 V2 family derives the Bluetooth binding key as
+        `md5(account number)` truncated to ten characters. That rule came from **one
+        Guardian 6000 V2 on firmware 1.2.0** - see
+        [the guide, section 12](../../blob/release/docs/GUARDIAN-WP-BLE.md#12-how-much-of-this-is-actually-known).
+
+        A report here is one cell in a table nobody else can fill in. "It worked first
+        time" is as useful as "it refused". Please do not post your account number,
+        device key or openId.
+
+  - type: input
+    id: model
+    attributes:
+      label: Model as sold, and firmware version if the app shows one
+      placeholder: "Guardian 6000 V2, firmware 1.2.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: ble_name
+    attributes:
+      label: BLE advertised name
+      description: The two-letter tag in the Bluetooth discovery card.
+      options:
+        - WP
+        - TT
+        - Something else
+        - Never seen it advertise
+    validations:
+      required: true
+
+  - type: input
+    id: product_id
+    attributes:
+      label: Product ID
+      description: >
+        The 6-character ASCII string in the advertisement, shown in the discovery card
+        and in the integration's startup log. Leave blank if unknown.
+      required: false
+      placeholder: "95haDY"
+
+  - type: dropdown
+    id: method
+    attributes:
+      label: Which setup method did you use?
+      options:
+        - Use my Cleanergy account number
+        - Fetch key from Cleanergy cloud account
+        - Enter an existing device key
+        - Create a new device key
+        - None of them worked
+    validations:
+      required: true
+
+  - type: dropdown
+    id: derived_key
+    attributes:
+      label: Did the derived key get accepted?
+      description: >
+        "Accepted" means the station kept the connection and telemetry appeared. The
+        failure you are looking for if it did not is: connects, then the link drops
+        within a few seconds, over and over.
+      options:
+        - Accepted first try
+        - Accepted after I fixed something else
+        - Refused - station drops the link after a few seconds
+        - Refused - never connected at all
+        - Do not know
+    validations:
+      required: true
+
+  - type: dropdown
+    id: open_id
+    attributes:
+      label: Did you have to provide an openId?
+      description: >
+        The claim being tested. On the unit this was developed on the station streams
+        with that field empty, and the vendor's email-and-password API never returns one.
+      options:
+        - No, setup worked without one
+        - Yes, I had to supply one from somewhere
+        - I supplied one but do not think it mattered
+    validations:
+      required: true
+
+  - type: textarea
+    id: app
+    attributes:
+      label: Vendor app and account type
+      description: >
+        Which app paired the station (Cleanergy, OUPES, other), roughly which app
+        version, and whether the account was created with an email and password or
+        through WeChat. Do not include your email address.
+      placeholder: |
+        Cleanergy from Play Store, auto-updated, account created with email and password.
+    validations:
+      required: true
+
+  - type: textarea
+    id: entities
+    attributes:
+      label: What you got
+      description: >
+        Rough entity count and anything obviously missing or wrong. "39 entities, all
+        plausible" is a complete answer.
+      placeholder: |
+        39 entities. DC input 1 and 2 both show ~540 W, expansion battery count says 2.
+    validations:
+      required: true
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything else that mattered
+      description: >
+        Distance to the Bluetooth proxy, whether the station was asleep, whether you had
+        to wake it, whether you removed and re-added it in the app at any point.
+      required: false
