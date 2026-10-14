@@ -13,6 +13,8 @@ Everything that talks to the network lives in :mod:`.cloud_api`.
 """
 from __future__ import annotations
 
+import logging
+
 from typing import Any, Iterable, Mapping
 
 # On the wire openId occupies a 33-byte field (32 usable characters plus a
@@ -23,6 +25,8 @@ USER_ID_MAX = 2**40 - 1
 
 # Vendor JSON is inconsistent about casing between endpoints, so accept the
 # variants seen in the wild rather than betting on one.
+_LOGGER = logging.getLogger(__name__)
+
 _OPEN_ID_KEYS = ("openId", "open_id", "openid", "openID", "owner_open_id")
 _USER_ID_KEYS = ("uid", "userId", "user_id", "user")
 
@@ -32,6 +36,7 @@ REASON_OK = "ok"
 REASON_LOGIN_FAILED = "login_failed"
 REASON_NOT_BOUND = "not_bound"
 REASON_NO_OPEN_ID = "no_open_id"
+REASON_NO_USER_ID = "no_user_id"
 
 
 class CloudIdentity:
@@ -186,6 +191,22 @@ def resolve_identity(
 
     open_id = extract_open_id(record) or extract_open_id(account_open_id) or extract_open_id(login_info)
     if not open_id or user_id is None:
-        return CloudIdentity(open_id=open_id, user_id=user_id, reason=REASON_NO_OPEN_ID)
+        # Field *names* only, never values: an openId is an identifier and does not
+        # belong in a log file. But when this fails, the names are the entire
+        # diagnostic - it distinguishes "this account has no openId" from "the
+        # vendor renamed the field", and without it a user can only report that
+        # something failed. One warning per attempt is worth the line in the log.
+        _LOGGER.warning(
+            "Could not find an account identity in the vendor cloud response for "
+            "this station. Fields on the device record: %s. Fields on the login "
+            "response: %s. (Names only; no values are logged.)",
+            sorted(record or {}),
+            sorted(login_info or {}),
+        )
+        return CloudIdentity(
+            open_id=open_id,
+            user_id=user_id,
+            reason=REASON_NO_OPEN_ID if not open_id else REASON_NO_USER_ID,
+        )
 
     return CloudIdentity(open_id=open_id, user_id=user_id, reason=REASON_OK)

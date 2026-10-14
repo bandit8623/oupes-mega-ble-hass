@@ -37,7 +37,13 @@
           "cloud_identity_not_bound": "Logged in, but this station is not in that account's device list, so its openId cannot be read from the cloud. Enter openId and userId manually, or re-bind the station to this account in the official app and try again. (A station that has been unbound from the cloud keeps working over Bluetooth with the identity it already holds.)",
           "cloud_identity_no_open_id": "Found the station in that account, but the record carries no usable openId. Enter openId and userId manually instead."
         },
-        "description": "Your Cleanergy email and password are **not saved anywhere.** They are sent to the vendor once, to look up openId and userId, and then dropped — this integration stores only the values it reads back. Omit them and nothing changes except that you type those two values yourself.\n\nNote that the vendor API is plain HTTP with no HTTPS endpoint, so the credentials cross the network unencrypted, exactly as they do in the official app.\n\nThe identity stored here was {identity_source}."
+        "description": "Your Cleanergy email and password are **not saved anywhere.** They are sent to the vendor once, to look up openId and userId, and then dropped — this integration stores only the values it reads back. Omit them and nothing changes except that you type those two values yourself.\n\nNote that the vendor API is plain HTTP with no HTTPS endpoint, so the credentials cross the network unencrypted, exactly as they do in the official app.\n\nThe identity stored here was {identity_source}.",
+        "errors": {
+          "cloud_identity_login_failed": "Sign-in to the Cleanergy cloud failed. Check the email and password, or go back and choose a different method. Credentials are used once and never stored.",
+          "cloud_identity_not_bound": "This station is not in that account's device list. Add it in the Cleanergy app first — a Guardian / D5 V2 only carries the account identity after the app has bound it — then try again.",
+          "cloud_identity_no_open_id": "Signed in and found the station, but the vendor's records for it do not include the account identity (openId) this station needs in its Bluetooth authentication. The Home Assistant log names the fields that were present, which tells you whether the account lacks it or the vendor renamed it. You can still enter openId and userId yourself.",
+          "cloud_identity_no_user_id": "Signed in and found the station, but the numeric account id (userId) could not be read from the response. Try again; if it keeps happening, enter openId and userId yourself instead."
+        }
       }
     }
   },
@@ -115,6 +121,12 @@
           "cloud_identity_not_bound": "Signed in, but this station is not in that account's device list, so its openId cannot be read. Add it in the Cleanergy app first and try again - or go back and enter openId and userId manually.",
           "cloud_identity_no_open_id": "Found the station in that account but its record carries no openId. Try again in a moment, or go back and enter openId and userId manually.",
           "cloud_identity_no_user_id": "Signed in but the account id was missing from the response. Try again, or enter openId and userId manually."
+        },
+        "errors": {
+          "cloud_identity_login_failed": "Sign-in to the Cleanergy cloud failed. Check the email and password, or go back and choose a different method. Credentials are used once and never stored.",
+          "cloud_identity_not_bound": "This station is not in that account's device list. Add it in the Cleanergy app first — a Guardian / D5 V2 only carries the account identity after the app has bound it — then try again.",
+          "cloud_identity_no_open_id": "Signed in and found the station, but the vendor's records for it do not include the account identity (openId) this station needs in its Bluetooth authentication. The Home Assistant log names the fields that were present, which tells you whether the account lacks it or the vendor renamed it. You can still enter openId and userId yourself.",
+          "cloud_identity_no_user_id": "Signed in and found the station, but the numeric account id (userId) could not be read from the response. Try again; if it keeps happening, enter openId and userId yourself instead."
         }
       },
       "pairing": {

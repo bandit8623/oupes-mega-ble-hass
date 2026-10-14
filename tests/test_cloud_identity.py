@@ -25,6 +25,7 @@ from cloud_identity import (  # noqa: E402
     OPEN_ID_MAX_LEN,
     REASON_LOGIN_FAILED,
     REASON_NO_OPEN_ID,
+    REASON_NO_USER_ID,
     REASON_NOT_BOUND,
     REASON_OK,
     USER_ID_MAX,
@@ -180,6 +181,7 @@ def test_resolve_no_open_id_when_record_lacks_identity():
     )
     assert not identity.ok
     assert identity.reason == REASON_NO_OPEN_ID
+    assert not identity.open_id  # "WP" is a family tag, never a usable identity
 
 
 def test_resolve_falls_back_to_account_level_open_id():
@@ -196,7 +198,10 @@ def test_resolve_falls_back_to_account_level_open_id():
 def test_resolve_missing_uid_is_not_ok():
     identity = resolve_identity({"token": "t"}, [device_record()], device_id=DEVICE_ID)
     assert not identity.ok
-    assert identity.reason == REASON_NO_OPEN_ID
+    # This used to come back as "no openId", which sent people looking for a field
+    # that was sitting right there. The two failures now name which one happened.
+    assert identity.reason == REASON_NO_USER_ID
+    assert identity.open_id  # the openId was present; only the numeric id was missing
 
 
 def test_login_failed_reason_is_reachable():
