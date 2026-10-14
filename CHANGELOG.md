@@ -8,6 +8,37 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## Unreleased
+
+### Added
+
+- **openId / userId can now be fetched from the vendor cloud instead of typed.**
+  The options dialog gained two optional cloud-account fields: supply them and
+  the integration logs in, reads `uid` and your station's `openId`, and fills the
+  two identity fields. The password is used for that one request and is not part
+  of the options that get written — the options dict is assembled field by field
+  and the credential fields are deliberately excluded. If you pair using the
+  existing **cloud login** method, the same lookup runs automatically during
+  setup, so a Guardian bound to your account needs no typing at all.
+- Distinct failure messages for "wrong credentials" and "this station is not in
+  that account's device list". They need different fixes, and a station that was
+  unbound from the cloud is a normal state, not an error.
+
+### Fixed
+
+- `strings.json` had fallen behind `translations/en.json`: the `go_back` and
+  `runtime_max_minutes` labels were missing from it entirely, and the pairing
+  instructions were an older revision (missing the "the IoT module turns off,
+  press it back on" step). Anything generated from `strings.json` — including
+  future translations — could not have had those strings.
+
+### Tests
+
+- 27 new tests in `tests/test_cloud_identity.py` for the vendor-response parsing,
+  including the two shapes confirmed against the live API (`uid` rather than
+  `userId` at login, and the empty-`bind` response an unbound station returns).
+  CI now runs every test file standalone, not just the protocol one.
+
 ## v1.3.0
 
 Guardian / D5 V2 stations (BLE name `WP`) — the reason this fork exists.

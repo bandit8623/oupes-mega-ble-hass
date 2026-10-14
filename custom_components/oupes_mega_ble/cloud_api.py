@@ -1,16 +1,23 @@
-"""Cloud API client for OUPES device key retrieval.
+"""Cloud API client for OUPES device key and account identity retrieval.
 
 The OUPES cloud API at api.upspowerstation.top provides device metadata
-including the per-device ``device_key`` needed for BLE init packet 6.
+including the per-device ``device_key`` needed for BLE init packet 6, and the
+account identity (``openId`` + numeric id) that Guardian / D5 V2 stations embed
+in their AUTH frame.
 
 Authentication:
   1. ``POST /api/app/user/login`` with Cleanergy account email/password
-     returns a session *token*.
+     returns a session *token* and the account's ``uid``.
   2. ``GET /api/app/device/list?token=...`` returns all bound devices
-     with their ``device_key``.
+     with their ``device_key`` and ``openId``.
 
 The ``device_id`` is extracted from BLE advertising data during discovery.
 Device matching falls back to MAC address when device_id is unavailable.
+
+A station that is not present in the caller's device list is reported as
+``not_bound`` rather than as a login failure: those two look identical in the
+UI but need very different answers from the user. Identity field parsing and
+the wire-field limits live in :mod:`.cloud_identity`.
 
 **Important:** This API uses unencrypted HTTP (not HTTPS).  This mirrors
 the official Cleanergy app's own behaviour - OUPES does not offer an
@@ -23,6 +30,8 @@ import logging
 import aiohttp
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+
+from .cloud_identity import CloudIdentity, find_device_record, resolve_identity
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -46,6 +55,20 @@ async def async_cloud_login(
     Calls ``POST /api/app/user/login`` with the user's Cleanergy account
     credentials.  Returns the token string on success, ``None`` on failure.
     """
+    info = await async_cloud_login_info(hass, email, password)
+    return (info or {}).get("token") or None
+
+
+async def async_cloud_login_info(
+    hass: HomeAssistant,
+    email: str,
+    password: str,
+) -> dict | None:
+    """Log in and return the whole ``info`` object (token *and* ``uid``).
+
+    The account id is needed alongside the token for the Guardian / D5 V2 AUTH
+    frame, which is why this exists next to :func:`async_cloud_login`.
+    """
     session = async_get_clientsession(hass)
     payload = {
         "mail": email,
@@ -68,10 +91,10 @@ async def async_cloud_login(
             if body.get("ret") != 1:
                 _LOGGER.debug("Cloud login failed: %s", body.get("desc"))
                 return None
-            token = (body.get("info") or {}).get("token")
-            if token:
+            info = body.get("info") or {}
+            if info.get("token"):
                 _LOGGER.debug("Cloud login successful")
-                return token
+                return info
             _LOGGER.debug("Cloud login response missing token")
             return None
     except Exception as exc:
@@ -147,6 +170,79 @@ async def _fetch_by_device_id(
         return None
 
 
+async def async_fetch_bound_devices(
+    hass: HomeAssistant, token: str
+) -> tuple[list[dict], dict] | None:
+    """Return ``(bound_records, account_info)`` for the session *token*.
+
+    ``None`` means the request failed; an empty record list means the account
+    genuinely has no station bound to it, which is a different problem and is
+    reported as such by :func:`resolve_identity`.
+    """
+    if not token:
+        _LOGGER.debug("No cloud token provided - cannot fetch device list")
+        return None
+    session = async_get_clientsession(hass)
+    params = {**_COMMON_PARAMS, "token": token}
+    try:
+        async with session.get(
+            f"{API_BASE}/api/app/device/list",
+            params=params,
+            headers=_COMMON_HEADERS,
+            timeout=_TIMEOUT,
+        ) as resp:
+            if resp.status != 200:
+                _LOGGER.debug("Cloud API /device/list returned HTTP %d", resp.status)
+                return None
+            body = await resp.json(content_type=None)
+            if body.get("ret") != 1:
+                _LOGGER.debug("Cloud API /device/list error: %s", body.get("desc"))
+                return None
+            info = body.get("info") or {}
+            records = [d for d in (info.get("bind") or []) if isinstance(d, dict)]
+            # "share" holds stations shared *to* this account; an owner-facing
+            # lookup should not silently match those.
+            return records, info
+    except Exception as exc:
+        _LOGGER.debug("Cloud API /device/list request failed: %s", exc)
+        return None
+
+
+async def async_fetch_cloud_identity(
+    hass: HomeAssistant,
+    email: str = "",
+    password: str = "",
+    *,
+    device_id: str | None = None,
+    mac_address: str | None = None,
+    login_info: dict | None = None,
+) -> CloudIdentity:
+    """Recover the openId + numeric user id that a Guardian / D5 V2 AUTH needs.
+
+    One login, one device-list call - unless *login_info* is supplied, in which
+    case that login is reused and only the list is fetched (the config flow
+    wants the device key from the same session). Never stores or returns the
+    password. The result carries a reason code when it fails, so the UI can tell
+    "wrong password" apart from "this station is not bound to that account" -
+    the second being the usual reason a station keeps dropping the link.
+    """
+    if login_info is None:
+        login_info = await async_cloud_login_info(hass, email, password)
+    if not login_info:
+        return CloudIdentity(reason="login_failed")
+    fetched = await async_fetch_bound_devices(hass, login_info.get("token") or "")
+    if fetched is None:
+        return CloudIdentity(reason="login_failed")
+    records, account_info = fetched
+    return resolve_identity(
+        login_info,
+        records,
+        device_id=device_id,
+        mac_address=mac_address,
+        account_open_id=account_info,
+    )
+
+
 async def _fetch_from_list(
     session: aiohttp.ClientSession,
     token: str,
@@ -155,7 +251,6 @@ async def _fetch_from_list(
 ) -> str | None:
     """GET /api/app/device/list, find device by id or MAC, return its key."""
     params = {**_COMMON_PARAMS, "token": token}
-    target_mac = mac_address.upper().replace("-", ":") if mac_address else None
     try:
         async with session.get(
             f"{API_BASE}/api/app/device/list",
@@ -176,15 +271,9 @@ async def _fetch_from_list(
                 return None
             info = body.get("info") or {}
             devices = info.get("bind", [])
-            for dev in devices:
-                if device_id and dev.get("device_id") == device_id:
-                    return _extract_key(dev)
-                if target_mac:
-                    dev_mac = (dev.get("mac_address") or "").upper().replace(
-                        "-", ":"
-                    )
-                    if dev_mac == target_mac:
-                        return _extract_key(dev)
+            record = find_device_record(devices, device_id=device_id, mac_address=mac_address)
+            if record is not None:
+                return _extract_key(record)
     except Exception as exc:
         _LOGGER.debug("Cloud API /device/list request failed: %s", exc)
     return None

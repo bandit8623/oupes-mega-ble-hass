@@ -37,6 +37,12 @@ from homeassistant.helpers.selector import (
 )
 
 from .ble_pairing import PairingResult, async_pair_device, async_provision_wifi
+from .cloud_api import (
+    async_cloud_login_info,
+    async_fetch_cloud_identity,
+    async_fetch_device_key,
+)
+from .cloud_identity import open_id_fits, user_id_fits
 from .cloud_api import async_cloud_login, async_fetch_device_key
 from .const import (
     ATTR78_RUNTIME_MAX,
@@ -172,6 +178,13 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         self._reconfigure_repair: bool = False
         self._reconfigure_task: asyncio.Task | None = None
         self._reconfigure_new_data: dict[str, Any] = {}
+        # Recovered from the vendor cloud during the cloud-login step, when the
+        # station happens to be bound to the account the user logged in with.
+        # Guardian / D5 V2 units need both values in their AUTH frame, so
+        # capturing them here saves a manual lookup afterwards. Empty means
+        # "not recovered" and leaves the manual path in the options dialog.
+        self._cloud_open_id: str = ""
+        self._cloud_user_id: int = 0
 
     # -- Automatic bluetooth discovery ------------------------------------
 
@@ -449,7 +462,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not email or not password:
                 errors["cloud_email"] = "cloud_login_failed"
             else:
-                key = await _cloud_fetch_key(
+                key, identity = await _cloud_fetch_key_and_identity(
                     self.hass,
                     email,
                     password,
@@ -458,6 +471,24 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 if key:
                     self._pairing_key = key
+                    if identity is not None and identity.ok:
+                        self._cloud_open_id = identity.open_id or ""
+                        self._cloud_user_id = int(identity.user_id or 0)
+                    elif identity is not None:
+                        # Deliberately not fatal: a station that was unbound from
+                        # the cloud (or bound to a different account) still pairs
+                        # fine, and a Guardian can be finished from the options
+                        # dialog. Blocking here would lock people out of the
+                        # integration for a cloud-side condition they may not be
+                        # able to change.
+                        _LOGGER.warning(
+                            "Connected to the OUPES cloud but could not recover "
+                            "this station's account identity (%s). If this is a "
+                            "Guardian / D5 V2 ('WP') station, enter openId and "
+                            "userId in the integration options after setup, or it "
+                            "will drop Bluetooth after a few seconds",
+                            identity.reason,
+                        )
                     return await self.async_step_connection_settings()
                 errors["cloud_email"] = "cloud_login_failed"
 
@@ -515,6 +546,11 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     CONF_RUNTIME_MAX: runtime_max,
                     CONF_DEBUG_ATTRS: debug_attrs,
                     CONF_DEBUG_RAW: debug_raw,
+                    # Empty for Mega-family stations and for any Guardian whose
+                    # cloud binding could not be read; the options dialog is the
+                    # fallback in both cases.
+                    CONF_OPEN_ID: self._cloud_open_id,
+                    CONF_USER_ID: self._cloud_user_id,
                 },
             )
 
@@ -736,27 +772,45 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 # -- Helper -------------------------------------------------------------------
 
-async def _cloud_fetch_key(
+async def _cloud_fetch_key_and_identity(
     hass,
     email: str,
     password: str,
     device_id: str | None,
     mac_address: str | None,
-) -> str | None:
-    """Log in to the OUPES cloud and fetch the device_key in one shot."""
+) -> tuple[str | None, Any]:
+    """Log in to the OUPES cloud once and take the key *and* the account identity.
+
+    Returns ``(device_key, CloudIdentity | None)``. The identity half is best
+    effort: it needs the station to appear in that account's bound-device list,
+    which is not true of a station that was unbound from the cloud, and the
+    caller must cope with that.
+    """
     try:
-        token = await async_cloud_login(hass, email, password)
-        if not token:
-            return None
-        return await async_fetch_device_key(
+        login_info = await async_cloud_login_info(hass, email, password)
+        if not login_info:
+            return None, None
+        key = await async_fetch_device_key(
             hass,
             device_id=device_id,
             mac_address=mac_address,
-            token=token,
+            token=login_info.get("token") or "",
         )
     except Exception:  # noqa: BLE001
         _LOGGER.debug("Cloud key fetch failed", exc_info=True)
-        return None
+        return None, None
+
+    identity = None
+    try:
+        identity = await async_fetch_cloud_identity(
+            hass,
+            device_id=device_id,
+            mac_address=mac_address,
+            login_info=login_info,
+        )
+    except Exception:  # noqa: BLE001
+        _LOGGER.debug("Cloud identity lookup failed", exc_info=True)
+    return key, identity
 
 
 # -- Options flow (unchanged) -------------------------------------------------
@@ -771,39 +825,83 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
         errors: dict[str, str] = {}
-        if user_input is not None:
-            raw_key = user_input.get(CONF_DEVICE_KEY, "").strip()
-            raw_open_id = str(user_input.get(CONF_OPEN_ID, "") or "").strip()
-            try:
-                raw_user_id = int(user_input.get(CONF_USER_ID, 0) or 0)
-            except (TypeError, ValueError):
-                raw_user_id = -1
-
-            if raw_key and not _valid_device_key(raw_key):
-                errors[CONF_DEVICE_KEY] = "invalid_device_key"
-            # openId is a 33-char field on the wire (32 usable chars + NUL) and the
-            # userId field is 5 bytes big-endian.
-            if raw_open_id and (len(raw_open_id) > 32 or not raw_open_id.isascii()):
-                errors[CONF_OPEN_ID] = "invalid_open_id"
-            if raw_user_id < 0 or raw_user_id > 1099511627775:
-                errors[CONF_USER_ID] = "invalid_user_id"
-
-            if not errors:
-                opts = dict(user_input)
-                if raw_key:
-                    opts[CONF_DEVICE_KEY] = raw_key
-                opts[CONF_OPEN_ID] = raw_open_id
-                opts[CONF_USER_ID] = raw_user_id
-                return self.async_create_entry(title="", data=opts)
-
         current_key = (
             self._entry.options.get(CONF_DEVICE_KEY)
             or self._entry.data.get(CONF_DEVICE_KEY)
             or ""
         )
-
         default_poll = int(UPDATE_INTERVAL.total_seconds())
         default_stale = int(STALE_TIMEOUT.total_seconds() // 60)
+
+        if user_input is not None:
+            raw_key = str(user_input.get(CONF_DEVICE_KEY, "") or "").strip()
+            raw_open_id = str(user_input.get(CONF_OPEN_ID, "") or "").strip()
+            fetch_mail = str(user_input.get("cloud_email", "") or "").strip()
+            fetch_passwd = str(user_input.get("cloud_password", "") or "").strip()
+            try:
+                raw_user_id = int(user_input.get(CONF_USER_ID, 0) or 0)
+            except (TypeError, ValueError):
+                raw_user_id = -1
+
+            # Optional lookup, so nobody has to poke the vendor API by hand. The
+            # credentials exist only inside this call: they are not part of the
+            # opts built below, so they cannot reach .storage. Leaving both
+            # fields empty keeps the manual path and touches nothing.
+            if fetch_mail and fetch_passwd:
+                try:
+                    identity = await async_fetch_cloud_identity(
+                        self.hass,
+                        fetch_mail,
+                        fetch_passwd,
+                        device_id=str(self._entry.data.get(CONF_DEVICE_ID, "") or ""),
+                        mac_address=str(self._entry.data.get(CONF_ADDRESS, "") or ""),
+                    )
+                except Exception:  # noqa: BLE001
+                    _LOGGER.debug("Cloud identity lookup failed", exc_info=True)
+                    identity = None
+                if identity is not None and identity.ok:
+                    raw_open_id = identity.open_id or ""
+                    raw_user_id = int(identity.user_id or 0)
+                else:
+                    errors["cloud_email"] = (
+                        f"cloud_identity_{identity.reason}"
+                        if identity is not None
+                        else "cloud_identity_login_failed"
+                    )
+
+            if raw_key and not _valid_device_key(raw_key):
+                errors[CONF_DEVICE_KEY] = "invalid_device_key"
+            # openId occupies a 33-byte field on the wire (32 usable chars plus a
+            # terminator) and the user id a 5-byte big-endian integer; anything
+            # larger cannot be transmitted, so reject it here rather than have
+            # the station silently refuse the frame.
+            if not open_id_fits(raw_open_id):
+                errors[CONF_OPEN_ID] = "invalid_open_id"
+            if not user_id_fits(raw_user_id):
+                errors[CONF_USER_ID] = "invalid_user_id"
+
+            if not errors:
+                # Assembled field by field instead of copying user_input, so that
+                # a future schema addition (credentials, above all) cannot be
+                # persisted by accident. Anything absent from this list is simply
+                # not stored.
+                opts = dict(self._entry.options)
+                opts[CONF_DEVICE_KEY] = raw_key or current_key
+                opts[CONF_OPEN_ID] = raw_open_id
+                opts[CONF_USER_ID] = raw_user_id
+                opts[CONF_CONTINUOUS] = bool(user_input.get(CONF_CONTINUOUS, True))
+                opts[CONF_POLL_INTERVAL] = int(
+                    user_input.get(CONF_POLL_INTERVAL, default_poll)
+                )
+                opts[CONF_STALE_TIMEOUT] = int(
+                    user_input.get(CONF_STALE_TIMEOUT, default_stale)
+                )
+                opts[CONF_RUNTIME_MAX] = int(
+                    user_input.get(CONF_RUNTIME_MAX, ATTR78_RUNTIME_MAX)
+                )
+                opts[CONF_DEBUG_ATTRS] = bool(user_input.get(CONF_DEBUG_ATTRS, False))
+                opts[CONF_DEBUG_RAW] = bool(user_input.get(CONF_DEBUG_RAW, False))
+                return self.async_create_entry(title="", data=opts)
 
         return self.async_show_form(
             step_id="init",
@@ -853,6 +951,15 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                         CONF_DEBUG_RAW,
                         default=self._entry.options.get(CONF_DEBUG_RAW, False),
                     ): bool,
+                    # Transient: used for one cloud request and dropped before the
+                    # options are written. Kept at the end of the form so the two
+                    # identity fields above read as the primary path.
+                    vol.Optional("cloud_email", default=""): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.EMAIL)
+                    ),
+                    vol.Optional("cloud_password", default=""): TextSelector(
+                        TextSelectorConfig(type=TextSelectorType.PASSWORD)
+                    ),
                 }
             ),
             errors=errors,

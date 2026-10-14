@@ -43,6 +43,25 @@ The station's own firmware uses the same cleartext endpoint, so this is a proper
 of the product, not of this integration — but you should not have to take that on
 trust, so it is stated here.
 
+## If you use the cloud lookup for openId / userId
+
+The options dialog can read a Guardian's identity from the vendor cloud so you do
+not have to poke the API yourself. What that does and does not do:
+
+- Your Cleanergy password is passed into a single `async_fetch_cloud_identity`
+  call and never assigned to anything that is persisted. The options dictionary
+  the flow writes is built field by field, and the cloud credential fields are
+  not on that list — so they cannot be stored in `.storage`, in the config entry,
+  or in a Home Assistant backup *by this code*. Home Assistant may still echo
+  form input in its own debug logs; if that matters to you, use the manual fields
+  instead, which are functionally identical.
+- It is a voluntary second credential exposure. The station does not need the
+  cloud at run time: once openId/userId are in the entry options, everything
+  happens over Bluetooth and the vendor servers are never contacted again.
+- Deleting those two option fields does not unpair anything; it only removes
+  stored identifiers.
+
+
 ## Reporting a vulnerability
 
 Use [GitHub private security advisories](https://github.com/bandit8623/oupes-mega-ble-hass/security/advisories/new)

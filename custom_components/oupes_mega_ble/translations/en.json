@@ -12,7 +12,9 @@
           "debug_attr_logging": "Debug: log all attribute values to CSV",
           "debug_raw_logging": "Debug: log raw BLE packets to CSV",
           "open_id": "Cloud openId (Guardian / D5 V2 only)",
-          "user_id": "Cloud userId (Guardian / D5 V2 only)"
+          "user_id": "Cloud userId (Guardian / D5 V2 only)",
+          "cloud_email": "Cleanergy email — optional, used once, not saved",
+          "cloud_password": "Cleanergy password — optional, used once, not saved"
         },
         "data_description": {
           "device_key": "10-character hex key unique to your device (e.g. bd236b1695). You can override it here if needed.",
@@ -23,13 +25,19 @@
           "debug_attr_logging": "Log parsed attribute values with packet classification to a CSV in your HA config folder. Includes direction (TX/RX), command type (cmd1/cmd2_resp/cmd3_resp), packet index, and parsed values.",
           "debug_raw_logging": "Log every raw BLE packet (TX and RX) with direction and command classification to a CSV in your HA config folder. Useful for diagnosing missing settings responses.",
           "open_id": "Only for stations that advertise the BLE name WP - the Guardian / D5 V2 family, e.g. the Guardian 6000 V2. Enter the openId of the Cleanergy/OUPES account that owns the station (it is in the cloud device record). Leave empty for TT stations such as the Mega 1.",
-          "user_id": "Numeric user id of the same Cleanergy/OUPES account, returned by the cloud login. Required together with the openId on WP stations; leave at 0 for TT stations. Changing either value re-pairs the station."
+          "user_id": "Numeric user id of the same Cleanergy/OUPES account, returned by the cloud login. Required together with the openId on WP stations; leave at 0 for TT stations. Changing either value re-pairs the station.",
+          "cloud_email": "Fill both cloud fields to have openId and userId read from the vendor cloud for you. Used for that single request only: the options this dialog writes are built field by field, and the cloud fields are not among them, so they cannot land in Home Assistant's .storage or in a backup. Home Assistant's own debug logging may still echo form input — if that matters to you, leave these blank and fill in openId and userId above instead. Either route ends up identical.",
+          "cloud_password": "Sent over plain HTTP (the vendor offers no HTTPS endpoint) and discarded after the request. Nothing in this integration retains it."
         },
         "error": {
           "invalid_device_key": "Device key must be exactly 10 hexadecimal characters (e.g. bd236b1695).",
-          "invalid_open_id": "openId must be plain ASCII and at most 32 characters.",
-          "invalid_user_id": "userId must be a positive number not larger than 1099511627775."
-        }
+          "invalid_open_id": "openId must be 32 ASCII characters or fewer - that is all the station's AUTH frame can carry.",
+          "invalid_user_id": "userId must be a whole number between 0 and 1099511627775.",
+          "cloud_identity_login_failed": "Cloud login failed - wrong email or password, or the vendor API at api.upspowerstation.top is unreachable from Home Assistant.",
+          "cloud_identity_not_bound": "Logged in, but this station is not in that account's device list, so its openId cannot be read from the cloud. Enter openId and userId manually, or re-bind the station to this account in the official app and try again. (A station that has been unbound from the cloud keeps working over Bluetooth with the identity it already holds.)",
+          "cloud_identity_no_open_id": "Found the station in that account, but the record carries no usable openId. Enter openId and userId manually instead."
+        },
+        "description": "Your Cleanergy email and password are **not saved anywhere.** They are sent to the vendor once, to look up openId and userId, and then dropped — this integration stores only the values it reads back. Omit them and nothing changes except that you type those two values yourself.\n\nNote that the vendor API is plain HTTP with no HTTPS endpoint, so the credentials cross the network unencrypted, exactly as they do in the official app."
       }
     }
   },
@@ -95,7 +103,7 @@
         },
         "data_description": {
           "cloud_email": "The email address you use to log in to the Cleanergy app.",
-          "cloud_password": "Your Cleanergy app password. Used once, not stored.",
+          "cloud_password": "Used to fetch this station's device key once, and not saved by this integration — only the device key it retrieves is kept. The vendor API is plain HTTP with no HTTPS endpoint, so the password crosses the network unencrypted, as it does in the official app.",
           "go_back": "Check this and click Submit to return to the method selection screen."
         }
       },

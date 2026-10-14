@@ -28,8 +28,11 @@ jobs:
 
       # The suite is deliberately dependency-free so it also runs without pytest:
       #   python tests/test_protocol_wp.py
+      #   python tests/test_cloud_identity.py
       - name: Standalone runner
-        run: python tests/test_protocol_wp.py
+        run: |
+          python tests/test_protocol_wp.py
+          python tests/test_cloud_identity.py
 
   metadata:
     name: Integration metadata

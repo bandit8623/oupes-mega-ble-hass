@@ -61,13 +61,44 @@ the Mega family in three ways that matter here:
 
 Tested on a single Guardian 6000 V2 with two expansion battery packs.
 
-#### Finding your openId and userId
+#### Getting openId and userId automatically
+
+The integration can read both values for you: open the options dialog, enter your
+Cleanergy email and password in the two **optional** cloud fields at the bottom,
+and press Submit. It performs the same two requests the official app makes —
+`POST /api/app/user/login`, then `GET /api/app/device/list` — takes `uid` from the
+login response and `openId` from your station's record, and fills the two fields
+above.
+
+Three things to know about that path:
+
+- **The password is not stored.** It is passed to one request and discarded. The
+  options the integration writes are assembled field by field, and the cloud
+  credential fields are deliberately not on that list, so they cannot end up in
+  `.storage` even by accident. If that trade-off is not acceptable to you, leave
+  the fields blank and use the manual route below — it works identically.
+- **The vendor API is plain HTTP**, with no HTTPS endpoint offered. The password
+  crosses the network unencrypted, exactly as it does in the official app.
+- **It needs the station to still be bound to that account.** A station that was
+  unbound from the cloud returns an empty device list, and the dialog says so
+  (*"not in that account's device list"*) rather than reporting a login failure.
+  That is not an error in your credentials — the station still works over
+  Bluetooth with the identity it already holds, and you can enter it manually.
+
+If you pair with the **cloud login** method, this lookup happens automatically as
+part of setup, so a Guardian bound to the account you logged into needs no
+typing at all.
+
+#### Finding your openId and userId by hand
 
 Both come from the same cloud API the official app uses
 (`api.upspowerstation.top`):
 
-- **openId** — the `openId` of the station's record in the device-list response.
-- **userId** — the `userId` returned by the login request.
+- **userId** — the `uid` field of the `POST /api/app/user/login` response. It is
+  the numeric account id; the response has no field literally named `userId`.
+- **openId** — the `openId` of the station's record inside `info.bind` in the
+  `GET /api/app/device/list?token=...` response. Some records hold the literal
+  `"WP"` there instead of an identity, which is never usable.
 
 They must belong to the account the station is currently bound to, and changing
 either one means re-pairing the station.
@@ -88,8 +119,11 @@ order:
    entry, and press **Configure** (the gear icon on the integration card). The
    dialog is titled *OUPES Options — Guardian 6000 V2 build*.
 4. Fill in **Cloud openId (Guardian / D5 V2 only)** and **Cloud userId (Guardian /
-   D5 V2 only)**, then **Submit**. Telemetry normally populates within about twenty
-   seconds, on the next poll after the options are saved.
+   D5 V2 only)** — or leave both alone and let the integration read them from
+   your Cleanergy account using the two optional cloud fields at the bottom of
+   the same dialog ([details](#getting-openid-and-userid-automatically)). Then
+   press **Submit**. Telemetry normally populates within about twenty seconds, on
+   the next poll after the options are saved.
 
 `userId` is stored as a number, so a zero-prefixed value will not match what the
 station holds, and both fields must come from the account the station is bound to.
