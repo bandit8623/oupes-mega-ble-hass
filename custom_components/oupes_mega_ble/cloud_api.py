@@ -145,6 +145,22 @@ async def _fetch_by_device_id(
     token: str,
 ) -> str | None:
     """GET /api/app/device/info?device_id=...&token=... -> device_key."""
+    info = await fetch_device_info_payload(session, device_id, token)
+    return _extract_key(info)
+
+
+async def fetch_device_info_payload(
+    session: aiohttp.ClientSession,
+    device_id: str,
+    token: str,
+) -> dict | list | None:
+    """GET /api/app/device/info and hand back the whole ``info`` object.
+
+    The key lookup only wanted one field out of this response and threw the rest
+    away. That payload is a different shape from the ``/device/list`` entry - and
+    the list entry was measured to carry no account identity at all - so the
+    whole object is worth keeping for the identity search.
+    """
     params = {**_COMMON_PARAMS, "device_id": device_id, "token": token}
     try:
         async with session.get(
@@ -164,10 +180,21 @@ async def _fetch_by_device_id(
                     "Cloud API /device/info error: %s", body.get("desc")
                 )
                 return None
-            return _extract_key(body.get("info"))
+            return body.get("info")
     except Exception as exc:
         _LOGGER.debug("Cloud API /device/info request failed: %s", exc)
         return None
+
+
+async def async_fetch_device_info(
+    hass: HomeAssistant, device_id: str, token: str
+) -> dict | list | None:
+    """``/api/app/device/info`` payload for one station, for identity searching."""
+    if not device_id or not token:
+        return None
+    return await fetch_device_info_payload(
+        async_get_clientsession(hass), device_id, token
+    )
 
 
 async def async_fetch_bound_devices(
@@ -234,12 +261,18 @@ async def async_fetch_cloud_identity(
     if fetched is None:
         return CloudIdentity(reason="login_failed")
     records, account_info = fetched
+    # ``/device/info`` is the one per-station endpoint whose payload we were
+    # discarding after reading device_key. Search it for the identity too.
+    device_info = await async_fetch_device_info(
+        hass, device_id or "", login_info.get("token") or ""
+    )
     return resolve_identity(
         login_info,
         records,
         device_id=device_id,
         mac_address=mac_address,
         account_open_id=account_info,
+        extra_sources=[device_info] if device_info else None,
     )
 
 

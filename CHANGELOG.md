@@ -10,6 +10,19 @@ This fork tracks
 
 ## Unreleased
 
+- **The cloud identity search now descends into nested objects, and reads
+  `/device/info` as well as `/device/list`.** Measured on a live bound Guardian:
+  the list entry exposes `addtime, device_id, device_key, device_product_id,
+  firmware_version, home, id, mac_address, name, online, pic, sku, sn, system,
+  title` and the login response exposes `api_host, avatar, email, is_update,
+  mark, nickname, tcp_host*, token, udp_*, uid` — no openId at the top level of
+  either. Matching is therefore by key shape rather than a copied spelling list,
+  the search walks nested values (the unexamined `home` object being the one
+  plausible owner container), and the per-station `/device/info` payload — which
+  was being discarded after one field was read from it — is searched too. The
+  failure warning now lists dotted field *paths* instead of flat key lists, for
+  every endpoint searched.
+
 ### Measured and removed
 
 - **"Claim with a local identity" is no longer offered.** The premise was that a

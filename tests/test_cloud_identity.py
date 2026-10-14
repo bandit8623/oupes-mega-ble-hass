@@ -31,6 +31,7 @@ from cloud_identity import (  # noqa: E402
     USER_ID_MAX,
     CloudIdentity,
     coerce_user_id,
+    describe_key_paths,
     extract_open_id,
     extract_user_id,
     find_device_record,
@@ -236,6 +237,88 @@ def test_user_id_fits_boundaries():
     assert not user_id_fits(USER_ID_MAX + 1)
     assert not user_id_fits(-1)
     assert not user_id_fits("not a number")
+
+
+# ---------------------------------------------------------------------------
+# Nested search. Measured on a live account: a bound Guardian's /device/list
+# entry carries no openId at any level we could see, so the search now descends
+# into nested objects and matches on key shape. These pin that behaviour, and
+# just as importantly pin the safety of the diagnostic that goes with it.
+# ---------------------------------------------------------------------------
+
+
+def test_extract_open_id_finds_it_nested():
+    record = {"device_id": DEVICE_ID, "home": {"owner": {"openId": OPEN_ID}}}
+    assert extract_open_id(record) == OPEN_ID
+
+
+def test_extract_open_id_matches_by_key_shape_not_spelling():
+    assert extract_open_id({"home": {"wxOpenId": OPEN_ID}}) == OPEN_ID
+    assert extract_open_id({"home": [{"OPEN_ID": OPEN_ID}]}) == OPEN_ID
+
+
+def test_extract_open_id_still_rejects_placeholder_when_nested():
+    # "WP" is the family tag the vendor parks in identity-shaped fields. Finding
+    # it nested must not count as success - that is the failure mode that would
+    # otherwise send a bad identity over the wire and look like a range problem.
+    assert extract_open_id({"home": {"openId": "WP"}}) is None
+
+
+def test_extract_open_id_still_rejects_oversize_when_nested():
+    assert extract_open_id({"home": {"openId": "x" * (OPEN_ID_MAX_LEN + 1)}}) is None
+
+
+def test_extract_open_id_stops_at_the_depth_limit():
+    node = {"openId": OPEN_ID}
+    for _ in range(6):
+        node = {"next": node}
+    assert extract_open_id(node) is None
+
+
+def test_extract_open_id_prefers_the_record_own_spelling():
+    record = {"openId": OPEN_ID, "other": {"openid": "ffff1111aaaa2222bbbb3333cccc4444"}}
+    assert extract_open_id(record) == OPEN_ID
+
+
+def test_resolve_accepts_identity_from_another_endpoint():
+    # /device/info is a different payload shape again; it is passed through
+    # extra_sources because the list entry alone has no identity to find.
+    identity = resolve_identity(
+        LOGIN_INFO,
+        [device_record(openId=None)],
+        device_id=DEVICE_ID,
+        extra_sources=[{"home": {"openId": OPEN_ID}}],
+    )
+    assert identity.ok, identity.reason
+
+
+def test_resolve_reports_missing_open_id_from_extra_sources_too():
+    identity = resolve_identity(
+        LOGIN_INFO,
+        [device_record(openId=None)],
+        device_id=DEVICE_ID,
+        extra_sources=[{"home": {"openId": "WP"}}],
+    )
+    assert identity.reason == REASON_NO_OPEN_ID
+
+
+def test_describe_key_paths_is_names_only():
+    secret = "oG1PjSECRETneverlogme"
+    paths = describe_key_paths({"home": {"openId": secret}, "bind": [{"sn": "S1"}]})
+    assert "home.openId" in paths
+    assert "bind.[0].sn" in paths
+    joined = " ".join(paths)
+    assert secret not in joined and "S1" not in joined
+
+
+def test_describe_key_paths_covers_everything_the_warning_claims():
+    # The warning tells users it lists field paths. If it silently truncated the
+    # structure, the diagnostic that decides this whole investigation would be
+    # read as "the field is not there" when it was only cut off.
+    record = device_record(home={"owner": {"openId": None}})
+    paths = describe_key_paths(record)
+    for expected in ("device_key", "mac_address", "home", "home.owner", "home.owner.openId"):
+        assert expected in paths
 
 
 if __name__ == "__main__":
