@@ -43,10 +43,17 @@ the Mega family in three ways that matter here:
    token a Mega accepts, these stations expect the *config-net-info* frame, which
    embeds the **openId** and numeric **userId** of the Cleanergy account the
    station is bound to. If either is missing, or belongs to a different account,
-   the station replies `03 80 01 01 01` and drops the link about four seconds
-   after connecting — which looks exactly like a range problem. Enter both under
-   **Integrations → OUPES → Configure**; the integration logs a warning at
-   startup when it sees a Guardian / D5 V2 without them.
+   the station drops the link about four seconds after connecting — which looks
+   exactly like a range problem. Enter both under **Integrations → OUPES →
+   Configure**; the integration logs a warning at startup when it sees a
+   Guardian / D5 V2 without them.
+
+   One caution about reading the wire by hand: `03 80 01 01 01` is often quoted as
+   "wrong identity", but on a station that is **bound** to the vendor app that frame
+   arrives unsolicited the moment you subscribe to notifications, before it has read
+   anything you sent. It announces that the station holds a key; it is not a verdict on
+   yours. Keys tested against a bound station are unmeasurable — see
+   [the pairing guide](../../docs/GUARDIAN-WP-BLE.md), §7.
 2. **Telemetry is one packed TLV stream** — `[0x02][0x05][dpid][uint32 LE]`,
    7 bytes per entry, entries straddling the 17-byte payload slices, and
    notifications prefixed `0x03` instead of `0x01`. `parse_wp_stream()` handles

@@ -10,6 +10,25 @@ This fork tracks
 
 ## Unreleased
 
+### Added
+
+- **`docs/GUARDIAN-WP-BLE.md`** — a complete pairing guide for `WP` stations, written
+  from measurement rather than guesswork: where `openId` and `userId` come from and
+  which of them the vendor API will not give you, how the device key is derived, what
+  each of the station's refusal frames actually means, the app-versus-Home-Assistant
+  single-connection conflict, and the privacy properties of the vendor's plain-HTTP
+  API. Linked from the top of the README.
+
+### Fixed
+
+- **The `WP` device key is `md5(userId)` truncated to ten characters**, matching
+  `KeyUtils.createDeviceKey()` in the vendor APK. This had been measured before and
+  written off as not working: the probe that "disproved" it was run against a station
+  still bound to the phone, and a bound station refuses every outsider whatever key it
+  is offered. Both facts are now in the guide, along with the frame that tells the two
+  cases apart, because the symptom of a wrong key and the symptom of a bound station
+  are otherwise indistinguishable.
+
 - **The cloud identity search now descends into nested objects, and reads
   `/device/info` as well as `/device/list`.** Measured on a live bound Guardian:
   the list entry exposes `addtime, device_id, device_key, device_product_id,
