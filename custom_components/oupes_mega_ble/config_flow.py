@@ -303,10 +303,13 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 )
                 return await self.async_step_choose_method()
 
+        # Both families are offered as a suggested address. Filtering on "TT"
+        # alone predates Guardian support and left anyone adding a "WP" station by
+        # hand with an empty field and no hint that the station was right there.
         discovered = [
             svc
             for svc in async_discovered_service_info(self.hass)
-            if (svc.name or "").strip().upper() == "TT"
+            if (svc.name or "").strip().upper().startswith(("TT", "WP"))
         ]
         suggested_address = discovered[0].address if discovered else ""
 

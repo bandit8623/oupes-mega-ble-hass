@@ -25,6 +25,10 @@ This fork tracks
   a real key, so the cloud method reported a login failure after a login that had
   worked. The identity is the half a Guardian cannot do without, and it *does* come
   back, so setup now continues with a locally generated key instead of stopping.
+- **Manual setup could not suggest a Guardian.** The manual add screen listed only
+  stations advertising `TT`, so anyone adding a `WP` station by hand got an empty
+  address field with no hint that the station was sitting right there in the
+  discovery list. Both families are offered now.
 - `strings.json` had fallen behind `translations/en.json`: the `go_back` and
   `runtime_max_minutes` labels were missing from it entirely, and the pairing
   instructions were an older revision (missing the "the IoT module turns off,
