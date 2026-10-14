@@ -180,6 +180,36 @@ and neither one writes to the station: nothing in Home Assistant's own UI can, s
 you can disable, re-enable, even delete and re-add an entry without changing what
 the station holds. Only pairing writes.
 
+### Measured, not inferred
+
+Both directions were tried on a Guardian 6000 V2 with two ESPHome Bluetooth
+proxies, on 2026-10-14:
+
+* **HA loaded, app opened:** the app sat on "connecting" and never reached the
+  station, while HA kept streaming (910 W at the moment of the attempt). One link,
+  and the app does not get to negotiate for it.
+* **HA entry disabled, app opened:** the app still could not connect on the first
+  attempt. The likely reason is worth knowing, because it makes you think the
+  station is broken: while HA holds a continuous connection the station never
+  sleeps, and when you release it, it goes back to sleeping quickly. Wake it with
+  the power button and try again immediately.
+
+### When a firmware update needs the app
+
+Over the air updates are the vendor app's job, so this day may come. The sequence:
+
+1. **Disable** the HA entry. Do not remove it, and do not remove the station in the
+   app.
+2. Wake the station, connect the app, update, and let the station reboot.
+3. **Re-enable** the HA entry. It reconnects with the credentials it already has.
+
+If the update rotates the key, the symptom after step 3 is HA connecting and then
+getting no telemetry. Fix it by re-adding the station to the same account in the app
+and re-running the setup with that account number - or just re-enable first and see,
+because the key is derived from the account number and an update that changes it
+would have to change that derivation too. Nobody has seen this happen; the reason to
+write it down is that the failure looks like a broken integration and is not.
+
 ---
 
 ## 7. Bound, unbound, and what the station actually says
