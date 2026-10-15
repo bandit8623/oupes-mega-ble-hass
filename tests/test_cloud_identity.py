@@ -32,6 +32,7 @@ from cloud_identity import (  # noqa: E402
     USER_ID_MAX,
     CloudIdentity,
     coerce_user_id,
+    describe_identity_risk,
     describe_key_paths,
     extract_open_id,
     extract_user_id,
@@ -40,6 +41,7 @@ from cloud_identity import (  # noqa: E402
     open_id_fits,
     resolve_identity,
     user_id_fits,
+    user_id_is_plausible,
 )
 
 OPEN_ID = "EXAMPLEopenId0123456789abcdef"    # synthetic; real openIds are ~28 chars
@@ -379,6 +381,47 @@ def test_describe_key_paths_marks_parsed_blobs():
     assert "detail.config~json" in paths
     assert "detail.config~json.openId" in paths
     assert OPEN_ID not in " ".join(paths)
+
+
+def test_plausibility_boundaries():
+    """The line between 'warn' and 'leave alone', pinned at the edges.
+
+    Pairs with the gap tests in test_known_gaps_for_1_4_6.py: those state the
+    contract, these pin the boundary so a later tweak to the run detector cannot
+    quietly start flagging real accounts.
+    """
+    # Runs of three or more: flagged.
+    assert user_id_is_plausible(123) is False
+    assert user_id_is_plausible(321) is False
+    assert user_id_is_plausible(1234) is False
+    assert user_id_is_plausible("1234") is False   # strings judged too
+    # Not runs, even when short, repeated, or near-miss: never flagged.
+    assert user_id_is_plausible(999) is True       # repeated digits are not a run
+    assert user_id_is_plausible(24680) is True     # step of 2 is not a run
+    assert user_id_is_plausible(12) is True        # two digits cannot be a run
+    assert user_id_is_plausible(1230) is True      # run breaks on the last digit
+    # The sentinel and everything that is not this function's job to judge.
+    assert user_id_is_plausible(0) is True         # "not set", always acceptable
+    assert user_id_is_plausible(-7) is True        # rejection belongs upstream
+    assert user_id_is_plausible("abc") is True     # not a number: nothing to judge
+    assert user_id_is_plausible(None) is True
+    assert user_id_is_plausible(True) is True      # bools are coerce_user_id's mess
+
+
+def test_describe_identity_risk_never_echoes_the_number():
+    """The user ID is the seed of the BLE credential; the sentence must not leak it.
+
+    Returns None for anything plausible, and for a flagged value describes the
+    *shape* only - the same discipline as describe_key_paths(), which reports
+    field names and never values.
+    """
+    assert describe_identity_risk(999) is None
+    assert describe_identity_risk(0) is None
+    sentence = describe_identity_risk(1234)
+    assert sentence is not None
+    assert "1234" not in sentence
+    assert "4-digit" in sentence and "ascending" in sentence
+    assert "descending" in describe_identity_risk(4321)
 
 
 def test_describe_key_paths_distinguishes_empty_from_unexamined():

@@ -16,6 +16,10 @@ faked with a stub.
 
 The user IDs below are synthetic. The measured one is written down nowhere; it is the seed
 of that station's Bluetooth credential.
+
+Status: all three gaps below have been closed. The markers were deleted with the fix, as
+this file instructed; the tests stay as ordinary regression tests, so a gap can only come
+back by a deliberate edit to this file - which is the point.
 """
 
 from __future__ import annotations
@@ -91,23 +95,12 @@ def test_a_bogus_user_id_still_produces_a_well_formed_key():
 # test that gets deleted in frustration. Strict xfail is the opposite - it goes red
 # *because* the fix landed, and reads as an instruction.
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="v1.4.6 gap: an in-range but implausible user ID is accepted silently. "
-    "The field must not accept 123 without telling the user what it is about to do.",
-)
 def test_implausible_id_is_not_accepted_without_a_signal():
     import cloud_identity
 
     assert cloud_identity.user_id_is_plausible(123) is False
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="v1.4.6 decision, recorded here so it is argued with in code: plausibility must "
-    "WARN, never lock out. A short user ID is unusual, not impossible, and a hard reject "
-    "would turn a typo check into an account lockout for whoever has the earliest account.",
-)
 def test_plausibility_must_warn_rather_than_lock_out():
     import cloud_identity
 
@@ -115,11 +108,6 @@ def test_plausibility_must_warn_rather_than_lock_out():
     assert cloud_identity.user_id_is_plausible(0) is True  # "not set" stays acceptable
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="v1.4.6 gap: nothing is logged when a hand-typed user ID is accepted, so a "
-    "wrong one looks like a broken radio. One WARNING per distinct reason, not per poll.",
-)
 def test_accepting_an_implausible_id_is_logged():
     import cloud_identity
 

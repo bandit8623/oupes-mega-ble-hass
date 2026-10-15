@@ -249,8 +249,10 @@ advertises the BLE name `WP`. A **Mega** advertises `TT`.
 > (the cog on the OUPES card).
 
 The cloud-account path was verified on a second Guardian 6000 V2 installed from
-scratch by a different user: Bluetooth transport, key fetched by signing in to the
-Cleanergy account during setup, paired on the first attempt.
+scratch by a different user: Bluetooth transport, and at the **Fetch key from
+Cleanergy cloud account** screen they entered the *same credentials they use to log
+into the official OUPES/Cleanergy app* - the account the app had already bound the
+station to. Paired on the first attempt.
 
 These stations put the owner's account identity *inside* the Bluetooth
 authentication frame. Without it the station answers the AUTH packet and then drops

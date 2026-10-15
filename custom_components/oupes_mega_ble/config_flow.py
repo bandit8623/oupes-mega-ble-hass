@@ -42,7 +42,12 @@ from .cloud_api import (
     async_fetch_cloud_identity,
     async_fetch_device_key,
 )
-from .cloud_identity import USER_ID_MAX, open_id_fits, user_id_fits
+from .cloud_identity import (
+    USER_ID_MAX,
+    describe_identity_risk,
+    open_id_fits,
+    user_id_fits,
+)
 from .local_identity import minted_identity
 from .cloud_api import async_cloud_login, async_fetch_device_key
 from .const import (
@@ -691,6 +696,13 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_USER_ID] = "invalid_user_id"
             else:
                 self._identity_user_id = account
+                # Warn, never lock out: a placeholder-shaped id is unusual, not
+                # impossible, and refusing it would be an account lockout for
+                # whoever holds the earliest account. One WARNING per accepted
+                # value (flows run once per attempt, not per poll), phrased so a
+                # later BLE timeout in the log points back at its real cause.
+                if (risk := describe_identity_risk(account)) is not None:
+                    _LOGGER.warning("Accepted user ID may be a placeholder: %s", risk)
                 self._pairing_key = derive_device_key(account)
                 # Deliberately left empty. The station does not read this field,
                 # and inventing a plausible-looking one would be worse than
@@ -888,6 +900,8 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 self._identity_open_id = open_id
                 self._identity_user_id = user_id
+                if (risk := describe_identity_risk(user_id)) is not None:
+                    _LOGGER.warning("Accepted user ID may be a placeholder: %s", risk)
                 self._identity_source = IDENTITY_SOURCE_MANUAL
                 if self._identity_next == "pairing":
                     return await self.async_step_pairing()
@@ -1332,6 +1346,12 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                 )
                 opts[CONF_OPEN_ID] = raw_open_id
                 opts[CONF_USER_ID] = raw_user_id
+                # Only a hand-typed id can be placeholder-shaped; when the cloud
+                # supplied it, raw_user_id was replaced by the vendor's value.
+                if (identity is None or not identity.ok) and (
+                    risk := describe_identity_risk(raw_user_id)
+                ) is not None:
+                    _LOGGER.warning("Accepted user ID may be a placeholder: %s", risk)
                 # Keep provenance honest. A cloud lookup overwrites both values so
                 # it also overwrites the label; a hand-edited openId is no longer
                 # whatever the previous label claimed. Without this, an entry that

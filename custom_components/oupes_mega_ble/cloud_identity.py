@@ -110,6 +110,82 @@ def user_id_fits(value: Any) -> bool:
     return 0 <= number <= USER_ID_MAX
 
 
+def _is_placeholder_run(number: int) -> bool:
+    """True for strictly ascending or descending digit runs of three or more.
+
+    ``123``, ``321``, ``1234``: the shapes people type when a field demands a
+    number and they have not got the number. Repeated digits (``999``) are
+    deliberately *not* flagged - the earliest account on the platform could
+    legitimately be one, and this check exists to warn, never to lock out.
+    """
+    digits = str(number)
+    if len(digits) < 3:
+        return False
+    codes = [ord(c) for c in digits]
+    step = codes[1] - codes[0]
+    if step not in (-1, 1):
+        return False
+    return all(b - a == step for a, b in zip(codes, codes[1:]))
+
+
+def user_id_is_plausible(value: Any) -> bool:
+    """True unless *value* is a number that looks typed-in-by-hand rather than read.
+
+    A warning signal for the flows, nothing more: ``derive_device_key`` is total,
+    so an implausible ID still produces a well-formed key and the station rejects
+    it at the Bluetooth layer four seconds after AUTH - which looks exactly like a
+    range problem. Detecting the shape here turns a radio mystery into one log line.
+
+    Contract, so this can never become an accidental account lockout:
+
+    - ``0`` ("not set") is always plausible.
+    - Only positive decimal numbers are judged; anything else is left alone
+      (returning True), because rejecting input is ``coerce_user_id``'s and
+      ``user_id_fits``' job, not this function's.
+    - The only thing called implausible is a strictly ascending/descending digit
+      run (``123``, ``4321``). Short-but-real IDs like ``999`` stay plausible.
+    """
+    if isinstance(value, bool) or value is None:
+        return True
+    if isinstance(value, str):
+        text = value.strip()
+        if not text.isdigit():
+            return True
+        number = int(text)
+    elif isinstance(value, int):
+        number = value
+    else:
+        try:
+            number = int(value)  # type: ignore[call-overload]
+        except (TypeError, ValueError):
+            return True
+    if number <= 0:
+        return True  # 0 is the sentinel; negatives are rejected upstream anyway
+    return not _is_placeholder_run(number)
+
+
+def describe_identity_risk(value: Any) -> str | None:
+    """One sentence on why an accepted user ID looks wrong, or ``None``.
+
+    Safe for the log: the user ID is the seed of that station's Bluetooth
+    credential (the key is ``md5(user ID)`` truncated), so the message describes
+    the *shape* of what was entered and never echoes the number itself.
+    """
+    if user_id_is_plausible(value):
+        return None
+    digits = str(int(value))
+    direction = "ascending" if int(digits[1]) - int(digits[0]) == 1 else "descending"
+    return (
+        f"The user ID just accepted is a {len(digits)}-digit {direction} run of "
+        "single digits, each one apart from the next, which is the shape of a "
+        "typed placeholder, not of a vendor account id. The binding key is "
+        "md5(user ID) truncated to 10 characters, so the station will reject the "
+        "key at the Bluetooth layer about 4 seconds after AUTH - that failure "
+        "looks like a range problem. Fetch the real id with 'Fetch key from "
+        "Cleanergy cloud account', or correct it under Configure (the cog)."
+    )
+
+
 def coerce_user_id(raw: Any) -> int | None:
     """Normalise a vendor user id (int or decimal string) to ``int``.
 
