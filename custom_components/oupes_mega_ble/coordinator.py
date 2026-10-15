@@ -38,6 +38,7 @@ from .protocol import (
     WRITE_CHAR_UUID,
     parse_ble_packet,
     parse_packet_sequence,
+    product_uses_packed_power,
     build_output_command,  # noqa: F401 - re-exported for switch.py
 )
 
@@ -93,6 +94,12 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         self.user_id = user_id
         self.model_name = model_name_from_product_id(product_id)
         self.product_series = series_from_product_id(product_id)
+        # Whether this device's packed-power dpids may be split whatever the combined
+        # value reads.  Derived from the product id only, so an idle station reading 0 on
+        # a packed field publishes 0 W + 0 W instead of two Unknown sensors.  Unknown
+        # product ids keep the old magnitude-only behaviour, which can never invent a
+        # split it has no evidence for.
+        self.packed_certain = product_uses_packed_power(product_id)
         self.last_successful_poll: datetime | None = None
         self.stale_timeout = timedelta(minutes=stale_timeout_minutes)
         self._pending_command: bytes | None = None
@@ -412,7 +419,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             """Parse buffered packet sequence and apply results."""
             if not c_pkt_buf:
                 return
-            parsed = parse_packet_sequence(c_pkt_buf)
+            parsed = parse_packet_sequence(c_pkt_buf, packed_certain=self.packed_certain)
             if parsed:
                 _apply_parsed(parsed)
                 if self._debug_attrs:
@@ -633,7 +640,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             """Parse buffered packet sequence and apply results."""
             if not o_pkt_buf:
                 return
-            parsed = parse_packet_sequence(o_pkt_buf)
+            parsed = parse_packet_sequence(o_pkt_buf, packed_certain=self.packed_certain)
             if parsed:
                 _apply_parsed(parsed)
                 if self._debug_attrs:

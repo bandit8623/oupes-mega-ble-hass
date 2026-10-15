@@ -459,6 +459,18 @@ def build_init_sequence(
 # last packet).  IMPORTANT: on the first packet byte 2 is the TLV tag 0x02,
 # NOT a Cmd2/Cmd3 echo byte, so it must not be stripped the way settings
 # responses are.
+#
+# MEASURED 2026-10-14, and it surprises everyone who reads this block: a Guardian
+# 6000 V2 in continuous mode does NOT use tag 0x02.  Its telemetry arrives as
+# [0x0A][0x05][dpid][uint32-le], which parse_ble_packet() decodes and
+# parse_wp_stream() rejects outright (it requires 0x02 and returns {} on every such
+# sequence).  Two consequences worth knowing:
+#   * a record can straddle a packet boundary - a captured sequence split one as
+#     `... 0a 05 | 17 00000000 ...`, so a per-packet regex over a capture will miss
+#     dpids that the real reassembling parser finds.  Replay captures through the
+#     parsers instead of grepping hex.
+#   * the packing knowledge in parse_wp_stream() never runs for this traffic, which is
+#     why packed dpids are ALSO unpacked by _split_packed_power() on the fallback path.
 # --------------------------------------------------------------------------
 WP_TLV_TAG = 0x02
 WP_TLV_LEN = 0x05
@@ -486,8 +498,30 @@ WP_SPLIT_U16_PSEUDO_BASE: dict[int, int] = {23: 2301}
 # single solar-watts field (that reading never exceeds 65535 W).
 WP_SPLIT_U16_ABSURD = 0x10000
 
+# Product ids whose dpid 23 has been seen packed on the wire, so the two halves can be
+# published even when the combined value is too small to prove packing by itself.  The
+# magnitude test above is deliberately family-blind and cannot tell "0 W on both inputs"
+# apart from a plain 0 W solar field, so it needs a fact about the device to be complete.
+#
+# Evidence per entry, because a wrong entry here writes a wrong number on someone's energy
+# dashboard:
+#   95haDY (Guardian 6000 V2 / D5 V2) - packing is confirmed by cross-check, not by
+#     guessing: every daytime sample's two halves add up to dpid 21 (Total Input Power)
+#     exactly, e.g. 0x07d107cf -> 1999 + 2001 = 4000 W, and 573 + 581 = 1154 W.  An idle
+#     capture on 2026-10-14 then showed the record for this dpid as `0a 05 17 00000000`,
+#     so when nothing is produced the packed field reads 0, which decomposes to 0 W + 0 W
+#     and nothing else.  (Which half is which physical socket is still unverified - see
+#     docs/GUARDIAN-WP-BLE.md.)
+# Add a product id here only with a capture showing two independent halves in one field.
+PACKED_U16_POWER_PRODUCT_IDS: set[str] = {"95haDY"}
 
-def _split_packed_power(parsed: dict) -> dict:
+
+def product_uses_packed_power(product_id: str) -> bool:
+    """True when this product id is known to pack two u16 readings into one dpid."""
+    return bool(product_id) and product_id in PACKED_U16_POWER_PRODUCT_IDS
+
+
+def _split_packed_power(parsed: dict, *, packed_certain: bool = False) -> dict:
     """Post-process ANY parsed dict, splitting packed-uint16 dpids.
 
     Applied to the output of every parser in this module, because the same field is
@@ -495,6 +529,13 @@ def _split_packed_power(parsed: dict) -> dict:
     Cmd2/Cmd3 TLV reader and the standard 0x0A-tagged telemetry reader all decode
     dpid 23 as one little-endian uint32.  Only the WP parser knows about the packing,
     so values that arrive via a fallback path would otherwise surface as ~80,000,000 W.
+
+    `packed_certain` means "this device's dpid 23 is a packed pair, whatever the value".
+    It is derived from the product id, never from the reading, and it is what lets an idle
+    station publish 0 W on both inputs instead of leaving them Unknown: once the field is
+    known to be packed, 0 has exactly one decomposition (0 and 0), which is also the only
+    split consistent with the aggregate this integration already publishes, since that
+    aggregate is lo + hi.
     """
     try:
         for dpid in WP_SPLIT_U16_DPIDS:
@@ -502,7 +543,7 @@ def _split_packed_power(parsed: dict) -> dict:
             base = WP_SPLIT_U16_PSEUDO_BASE[dpid]
             if base in parsed or base + 1 in parsed:
                 continue  # already split (also makes this idempotent)
-            if isinstance(val, int) and val >= WP_SPLIT_U16_ABSURD:
+            if isinstance(val, int) and (packed_certain or val >= WP_SPLIT_U16_ABSURD):
                 lo = val & 0xFFFF
                 hi = val >> 16
                 parsed[dpid] = lo + hi
@@ -714,11 +755,17 @@ _parse_ble_packet_impl = parse_ble_packet
 _parse_packet_sequence_impl = parse_packet_sequence
 
 
-def parse_ble_packet(data: bytearray) -> dict[int, int]:
+def parse_ble_packet(
+    data: bytearray, *, packed_certain: bool = False
+) -> dict[int, int]:
     """Parse one notification packet, then unpack any packed uint16 dpids."""
-    return _split_packed_power(_parse_ble_packet_impl(data))
+    return _split_packed_power(_parse_ble_packet_impl(data), packed_certain=packed_certain)
 
 
-def parse_packet_sequence(packets: list[bytearray]) -> dict[int, int]:
+def parse_packet_sequence(
+    packets: list[bytearray], *, packed_certain: bool = False
+) -> dict[int, int]:
     """Parse a whole notification sequence, then unpack any packed uint16 dpids."""
-    return _split_packed_power(_parse_packet_sequence_impl(packets))
+    return _split_packed_power(
+        _parse_packet_sequence_impl(packets), packed_certain=packed_certain
+    )
