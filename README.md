@@ -185,6 +185,12 @@ intended outcome, not a rivalry.
 >    possible from the app, and a factory reset means starting over there. Deleting
 >    the Home Assistant entry is safe and reversible; removing the station from the
 >    app is not.
+> 4. **Turn the phone's Bluetooth off, or force-stop the Cleanergy app, before Home
+>    Assistant connects.** The station answers one Bluetooth client at a time, so a
+>    phone that still holds it does not merely slow Home Assistant down - it blocks
+>    the connection entirely. The entry loads and the entities stay *unavailable*
+>    until the phone lets go, and retrying changes nothing. Leave the app installed;
+>    it just cannot be the one holding the station.
 >
 > What to expect once you submit: about 15 seconds to connect, then roughly 44
 > entities. The two DC input sensors read *unknown* while nothing is plugged in —
