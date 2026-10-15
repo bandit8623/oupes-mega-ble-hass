@@ -376,8 +376,10 @@ based on the BLE product ID.
 > Add the station in the vendor app first, and never remove it afterwards.
 >
 > **Scope of that claim:** everything about the `WP` family here was measured on a
-> single Guardian 6000 V2 running firmware 1.2.0. Other `WP` models and other firmware
-> are untested, not known-bad. See
+> single Guardian 6000 V2. Do not check that against a firmware number: the vendor reports
+> two different versions for that one unit (the app shows `0.0.4`, its cloud record says
+> `1.2.0`), and the string is not bumped on every update. Other `WP` models and other
+> builds are untested, not known-bad. See
 > [how much is actually known](docs/GUARDIAN-WP-BLE.md#12-how-much-of-this-is-actually-known)
 > and, if your station is not that one, please file the compatibility report.
 

@@ -67,7 +67,12 @@ the Mega family in three ways that matter here:
    the fallback split only engages from 65536 W upward — a figure no supported
    station can draw.
 
-Tested on a single Guardian 6000 V2 with two expansion battery packs.
+Tested on a single Guardian 6000 V2 with two expansion battery packs. There is no
+software version worth quoting for that unit: the Cleanergy app shows `0.0.4` while the
+vendor's cloud record for the same station says `1.2.0`, and the vendor does not change
+those strings on every update. Match your unit by BLE name (`WP`) and product id
+(`95haDY`), and by behaviour - if `md5(user ID)[:10]` authenticates, this page describes
+your station whatever the app says.
 
 #### Which pairing method to choose
 

@@ -5,8 +5,13 @@ Covers the **Guardian 6000 V2** and every other station whose Bluetooth name sta
 they authenticate differently, and the pairing screens in this integration look
 different because of it.
 
-Everything here was established by measurement against a Guardian 6000 V2
-(firmware 1.2.0), not by reading vendor documentation, which does not exist.
+Everything here was established by measurement against a Guardian 6000 V2, not by
+reading vendor documentation, which does not exist. One warning before you compare this to
+your own unit: the vendor reports **two different version strings for that station** - the
+Cleanergy app shows `0.0.4`, its cloud record says `1.2.0` - and neither is bumped on
+every update, so a version number cannot tell you whether this page applies to you.
+Match on the BLE name (`WP`), the product id (`95haDY`) and behaviour instead. See
+[How much of this is actually known](#12-how-much-of-this-is-actually-known).
 
 ---
 
@@ -295,7 +300,7 @@ because a bound station refuses every outsider regardless of the key.
 To get a station into the state where an outside claim can succeed you need it
 **unbound**, and:
 
-* Removing the device from the app is supposed to unbind it. On firmware 1.2.0 it
+* Removing the device from the app is supposed to unbind it. On the unit measured here it
   did not reliably do so, which is what made key-probing experiments read as
   "every candidate rejected" when the real reason was that the station was still
   bound to somebody and refuses all outsiders regardless of key.
@@ -404,17 +409,36 @@ The two rules that cost the most time to learn, stated once more:
 
 Read this section before you tell someone else that their station will work.
 
-Everything above came from **one Guardian 6000 V2**, firmware 1.2.0, product id
-`95haDY`, one Cleanergy account, one phone, over about two weeks. That is a sample size
+Everything above came from **one Guardian 6000 V2**, product id `95haDY`, one Cleanergy
+account, one phone, over about two weeks. That is a sample size
 of one, and it is stated rather than hidden because the alternative - writing it up as
 natural law - is how the openId myth survived as long as it did.
+
+**Do not use a firmware number to decide whether this applies to your station.** The
+vendor reports two different versions for the unit measured here: the Cleanergy app
+displays `0.0.4`, while the vendor's own cloud record for the same MAC address carries
+`"firmware_version": "1.2.0"`. The vendor does not change the string on every update
+(reported by the owner of this unit, who has taken over-the-air updates), so neither
+value identifies a build. Earlier drafts of this guide and of the front page quoted that
+cloud number as though it were a build label; it was one vendor's field, and it was
+presented as more precise than it is.
+
+What you *can* match on, in order of usefulness:
+
+| Signal | Where to read it | Why it helps |
+| --- | --- | --- |
+| BLE advertisement name `WP` | the pairing screen lists it; it is what selects this family's code path | puts you in the same family as the measured unit |
+| product id `95haDY` | the cloud record (`device_product_id`) | same product, not just same family |
+| behaviour | does `md5(user ID)[:10]` authenticate, does the app pair it | the only real evidence that this page describes your station |
+
+Claim by claim, and where each one stops being safe:
 
 | Claim | How it is known | Where it stops being safe |
 | --- | --- | --- |
 | Key is `md5(userId)[:10]` | Read out of the vendor's own APK (`KeyUtils.createDeviceKey`), then confirmed against the station | It is the *app's* generator, so it should hold for anything this app pairs. A different app, an old app version, or a station provisioned some other way could differ |
-| Station ignores the openId | One experiment: real key and userId, openId zero-filled, 43 telemetry frames back | One firmware version. An update could start checking it, and nothing here would predict that |
+| Station ignores the openId | One experiment: real key and userId, openId zero-filled, 43 telemetry frames back | One unit, one build. An update could start checking it, and nothing here would predict that |
 | Station compares a **stored** pair, not a recomputed hash | Invented userId carrying its own correct `md5` was refused | One unit. It is the best explanation of the data, not a disassembly of the check |
-| Removing the station in the app wipes the pair | Observed directly | One unit. Firmware 1.2.0 also failed to unbind reliably in the other direction, which is the same experiment being flaky |
+| Removing the station in the app wipes the pair | Observed directly | One unit. The same unit also failed to unbind reliably in the other direction, which is the same experiment being flaky |
 | Frame layout, `WP_DEVICE_ID`, packed dpid 23 | APK plus wire observation | These are on the wire, so they are the most solid things here |
 | ~40 entities, DC input split, expansion count | Measured on a unit with two expansion packs | Your model may report different dpids. The integration degrades to "entity missing" rather than "value wrong", which is the safe direction |
 
@@ -422,7 +446,8 @@ natural law - is how the openId myth survived as long as it did.
 
 * Every other `WP` model - the D5 6000 Plus and the other D5 V2 variants share the
   family tag but were never touched here.
-* Any firmware other than 1.2.0.
+* Other builds - **and you cannot check this by version**, because the two version strings
+  the vendor reports for the measured unit disagree and neither is bumped reliably.
 * More than one station on an account. The key is per-account, not per-station, so the
   prediction is that a second station works the same way - a prediction, not a result.
 * What a firmware update does to the stored pair.

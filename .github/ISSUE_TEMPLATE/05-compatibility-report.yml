@@ -7,7 +7,7 @@ body:
       value: |
         Setup on the Guardian / D5 V2 family derives the Bluetooth binding key as
         `md5(user ID)` truncated to ten characters. That rule came from **one
-        Guardian 6000 V2 on firmware 1.2.0** - see
+        Guardian 6000 V2** - see
         [the guide, section 12](../../blob/release/docs/GUARDIAN-WP-BLE.md#12-how-much-of-this-is-actually-known).
 
         A report here is one cell in a table nobody else can fill in. "It worked first
@@ -17,8 +17,11 @@ body:
   - type: input
     id: model
     attributes:
-      label: Model as sold, and firmware version if the app shows one
-      placeholder: "Guardian 6000 V2, firmware 1.2.0"
+      label: Model as sold, and the firmware version the app shows (if it shows one)
+      description: The vendor has been seen reporting **two different versions for one
+        station** (app `0.0.4`, cloud record `1.2.0`), so quote whichever you can see and
+        say where you saw it. Do not skip the report because the numbers disagree.
+      placeholder: "Guardian 6000 V2, app shows 0.0.4"
     validations:
       required: true
 

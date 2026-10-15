@@ -308,8 +308,9 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                 # the signature of an identity the station does not recognise. Only the
                 # user ID and its derived key are checked; the openId is not,
                 # so this deliberately does not send people looking for one. Everything
-                # about this verdict comes from a single unit on firmware 1.2.0 - see
-                # docs/GUARDIAN-WP-BLE.md section 12 - so it names what to look at
+                # about this verdict comes from a single unit - whose vendor version
+                # strings disagree, so it is not even identifiable by firmware number;
+                # see docs/GUARDIAN-WP-BLE.md section 12 - so it names what to look at
                 # rather than declaring what is wrong.
                 _LOGGER.warning(
                     "%s: connected %d times and each time the station dropped the link "
