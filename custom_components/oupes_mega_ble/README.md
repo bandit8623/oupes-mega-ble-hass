@@ -45,7 +45,7 @@ the Mega family in three ways that matter here:
    embeds the numeric **userId** of the Cleanergy account the
    station is bound to. If either is missing, or belongs to a different account,
    the station drops the link about four seconds after connecting — which looks
-   exactly like a range problem. Enter both under **Integrations → OUPES →
+   exactly like a range problem. Enter both under **the cog on the OUPES card →
    Configure**; the integration logs a warning at startup when it sees a
    Guardian / D5 V2 without them.
 
@@ -114,7 +114,8 @@ order:
 4. Telemetry normally appears within about twenty seconds of the entry loading.
 
 The options dialog still carries **Cloud userId** and **Cloud openId** fields for
-stations configured before this flow existed. `userId` there overrides whatever the
+stations configured before this flow existed. Reach the dialog with the **cog on the
+OUPES card → Configure**. `userId` there overrides whatever the
 entry was built with, and `openId` is not read by the station at all - it is kept in
 the frame because older firmware expects the field to exist. Neither needs filling in
 on a station set up through the user ID screen.
@@ -397,7 +398,13 @@ low 7 bits = packet index, bit 7 = last flag, byte 19 = CRC-8 checksum).
 ## Connection Options
 
 All connection settings are configurable per device through the HA UI:
-**Settings → Devices & Services → OUPES Mega → Configure**
+**Settings → Devices & Services → the cog on the OUPES card → Configure**
+
+The `Cloud userId` field there also tells you which user ID the entry is using, which is
+the quickest way to read your own number back out. It only holds a real value if the
+entry went through the email login, since that request is what looks the number up; an
+entry built by typing a device key shows `0`, which is expected and not a fault. The
+Cleanergy app does not display the number anywhere.
 
 | Option | Default | Description |
 |--------|---------|-------------|
