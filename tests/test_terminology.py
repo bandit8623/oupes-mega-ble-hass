@@ -174,12 +174,18 @@ def test_the_renamed_controls_exist():
         "the pairing-method selector must offer an option labelled with 'user ID' "
         f"(found: {option.group(1) if option else 'nothing'})"
     )
-    for section in ("config", "options"):
-        step = strings[section]["step"]["account_number"]
-        assert "User ID" in step["title"], f"{section}.account_number title: {step['title']!r}"
-        assert step["data"]["user_id"].strip() == "User ID", (
-            f"{section}.account_number field label: {step['data']['user_id']!r}"
-        )
+    step = strings["config"]["step"]["account_number"]
+    assert "User ID" in step["title"], f"config.account_number title: {step['title']!r}"
+    assert step["data"]["user_id"].strip() == "User ID", (
+        f"config.account_number field label: {step['data']['user_id']!r}"
+    )
+    # The options flow has no account_number step of its own - it shows the value as a
+    # pre-filled field on its single 'init' screen, which is where users are told to read
+    # it from. (An options.step.account_number block used to live here; nothing rendered
+    # it, and tests/test_flow_fields_have_labels.py is what proved it dead.)
+    init = strings["options"]["step"]["init"]["data"]["user_id"]
+    low = init.lower()
+    assert "userid" in low or "user id" in low, f"options.init user_id label: {init!r}"
 
 
 def test_allowed_labels_are_still_what_the_code_ships():

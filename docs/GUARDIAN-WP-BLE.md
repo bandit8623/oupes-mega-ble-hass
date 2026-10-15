@@ -349,13 +349,39 @@ contains the AUTH frame, so it holds your user ID in the clear.
 
 ## 9. Data you should expect to see
 
-A Guardian 6000 V2 with two expansion batteries reports roughly 40 entities. The ones
+An entity count is not a fixed number on this family. The station itself accounts for
+about 29 entities and each expansion battery pack that reports adds five more (charge,
+input power, output power, runtime, temperature), so the count tracks your battery
+count. The unit used here has three packs fitted and registered 44; the "roughly 40"
+figure quoted in earlier notes was the same station with two packs. The entities
 people ask about:
 
 * `dc_input_1_power`, `dc_input_2_power` — this family reports both DC inputs packed
   into one 32-bit field (dpid 23): two 16-bit halves. The parser splits them and puts
   their sum back where the aggregate was, so `solar_input_power` is the total of the
   two rather than a third, double-counted reading.
+  At zero input both halves publish **0 W**. Builds up to and including 1.4.4 left them
+  *unknown* there, because the split only fired on values too large to be plain watts and
+  0 is not one of those.
+  "Input 1" and "Input 2" mean **low half and high half of the field**. They are not
+  claims about which physical socket on the case feeds which entity — nobody has verified
+  that, and the wire gives no label to work from. To find out on your own unit: shade one
+  string and watch which of the two entities drops.
+  What they are physically: the station's **dual XT60 PV inputs**, per the owner of the
+  unit tested here. That is reported, not measured — nothing in the BLE stream names a
+  connector, and it still does not say which of the two identical sockets is Input 1.
+  They are two **independent** readings, not one number shown twice, and they are usually
+  different: captured pairs include 1999 W / 2001 W and 647 W / 2002 W. Both reading 0 is
+  simply night-time. The only promise the split makes is
+  `solar_input_power == dc_input_1_power + dc_input_2_power`.
+  Naming note: on product `95haDY` — the model whose owner reported those sockets as
+  XT60 — the **display** names are now "DC XT60 Input 1" and "DC XT60 Input 2", bare of a
+  unit suffix because the watt unit is already on the reading. `unique_id` is built from the sensor key, not the name, so
+  an existing install keeps `sensor.<device>_dc_input_1_power` and all of its history —
+  only the friendly name changes. A **fresh** install names the entity from the new string,
+  so expect `sensor.<device>_dc_xt60_input_1` — Home Assistant generates that slug
+  and it is unverified on a second unit. Copy entity ids out of your own HA rather than out
+  of this document.
 * `expansion_battery_count` — counted from the packs that actually reported telemetry
   this cycle, not read from a register. The firmware is supposed to answer a pack
   count on dpid 51 but does not on this model, so counting live slots is what works,
@@ -440,7 +466,9 @@ Claim by claim, and where each one stops being safe:
 | Station compares a **stored** pair, not a recomputed hash | Invented userId carrying its own correct `md5` was refused | One unit. It is the best explanation of the data, not a disassembly of the check |
 | Removing the station in the app wipes the pair | Observed directly | One unit. The same unit also failed to unbind reliably in the other direction, which is the same experiment being flaky |
 | Frame layout, `WP_DEVICE_ID`, packed dpid 23 | APK plus wire observation | These are on the wire, so they are the most solid things here |
-| ~40 entities, DC input split, expansion count | Measured on a unit with two expansion packs | Your model may report different dpids. The integration degrades to "entity missing" rather than "value wrong", which is the safe direction |
+| Continuous telemetry uses tag `0x0A`, not the `0x02` that `parse_wp_stream()` expects | Replayed a 2026-10-14 capture through the parsers: `parse_wp_stream()` returned `{}` on every sequence while the sequence reader decoded them fine | Explains why the packing has to be applied on the fallback path too. Records can straddle a packet boundary, so grepping a hex capture finds dpids that are not there |
+| The two packed halves are the dual **XT60** PV inputs | Owner of the unit tested here, who can see the case | Reported, not measured. BLE never names a connector, and it does not identify which socket is Input 1 |
+| Entity count (44 with three packs), DC input split, expansion count | Measured on the unit used here; a third pack was added during testing | Your model may report different dpids. The integration degrades to "entity missing" rather than "value wrong", which is the safe direction |
 
 **Not tested at all, so treat as unknown:**
 

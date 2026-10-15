@@ -62,12 +62,28 @@ the Mega family in three ways that matter here:
 3. **Attr 23 packs two readings.** On these units it carries the power of **both
    DC inputs** as two little-endian uint16 halves, low half first, so decoding it
    as a single uint32 gives roughly 131,000,000 W. The sum stays published as
-   **Solar Input Power** (attr 23) and each input appears separately as **DC Input
-   1 Power** and **DC Input 2 Power**. Other models use attr 23 as one wattage, so
-   the fallback split only engages from 65536 W upward — a figure no supported
-   station can draw.
+   **Solar Input Power** (attr 23) and each input appears separately. On the Guardian
+   6000 V2 / D5 V2 they are named **DC XT60 Input 1** and **DC XT60 Input 2**
+   — an owner-reported connector name, see the caveat below — and on any other model
+   **DC Input 1 Power** / **DC Input 2 Power**, because nobody has confirmed those
+   sockets. Two things to know about them.
 
-Tested on a single Guardian 6000 V2 with two expansion battery packs. There is no
+   - **They report 0 W, not *unknown*,** when nothing is producing. The station puts both
+     inputs in one field, and this build splits that field for product id `95haDY`
+     whatever the value reads, because the packing for that product is proven: in every
+     daytime sample the two halves add up to the station's own Total Input Power, and a
+     packed 0 has only one decomposition. Other models use attr 23 as one wattage, so for
+     them the split still engages only from 65536 W upward, where a reading cannot be plain
+     watts. Builds up to and including **1.4.4** left both sensors *unknown* at zero input.
+   - **"Input 1" and "Input 2" name the low and high half of the field.** That is not a
+     claim about which physical socket they are, and it does not say which half is which.
+     These are the station's **dual XT60 PV inputs**, per the owner of the unit tested
+     here; the two sockets are identical and the wire carries no connector label, so
+     Input 1 versus Input 2 is still open. Settle it on your own unit: shade one string
+     and watch which entity drops.
+
+Tested on a single Guardian 6000 V2 with three expansion battery packs (a third was
+added part-way through testing, which is why some earlier notes here say two). There is no
 software version worth quoting for that unit: the Cleanergy app shows `0.0.4` while the
 vendor's cloud record for the same station says `1.2.0`, and the vendor does not change
 those strings on every update. Match your unit by BLE name (`WP`) and product id
@@ -278,8 +294,8 @@ retrieved key is saved.
 | Total Input Power | 21 | W | Grid + solar combined |
 | Grid Input Power | 22 | W | Grid only |
 | Solar Input Power | 23 | W | MPPT solar input. On Guardian / D5 V2 stations attr 23 packs both DC inputs as two uint16 halves; the sum is published here and each input appears below |
-| DC Input 1 Power | 23 (low half) | W | Guardian / D5 V2 only — power on the first DC input |
-| DC Input 2 Power | 23 (high half) | W | Guardian / D5 V2 only — power on the second DC input |
+| DC Input 1 Power | 23 (low half) | W | Guardian / D5 V2 only — power on the first DC input. Named **DC XT60 Input 1** on product `95haDY`, where the owner confirmed the sockets; `entity_id` is unchanged either way |
+| DC Input 2 Power | 23 (high half) | W | Guardian / D5 V2 only — power on the second DC input. Named **DC XT60 Input 2** on product `95haDY` |
 | Remaining Runtime | 30 | min | At current discharge rate. Clamped to the configured runtime cap (default 5940 min / 99 h) when charging or idle. |
 | Main Unit Temperature | 32 | °F | Internal temperature (÷10; e.g. raw 963 → 96.3 °F) |
 | External Battery 1–N Runtime | 78 | min | Per battery module. Clamped to the configured runtime cap (default 5940 min / 99 h) when charging or idle. |
@@ -299,9 +315,15 @@ retrieved key is saved.
 >
 > This integration creates sensor entities for up to 6 slots. Slots with no
 > data are automatically marked **Unavailable** and become active when data
-> arrives. All entities retain their last known value for up to 10 minutes if
-> a poll fails. They only go unavailable if the device has been unreachable
-> for longer than that.
+> arrives. When a poll fails, entities keep their last known value until the
+> stale timeout passes — **15 minutes by default**, adjustable in the entry's
+> options (the `stale_timeout` field in the options dialog).
+>
+> One exception, measured rather than inferred: if the entry reloads or Home
+> Assistant restarts and the *first* refresh fails, the entities go unavailable
+> straight away instead of waiting out the timeout. The timeout governs a running
+> integration losing contact, not a start-up that never got a reading. This is what
+> you see when the phone app is holding the connection - close it and reload.
 
 ### Binary Sensors (on/off)
 
@@ -462,7 +484,8 @@ only if you deliberately want to program a new key.
 | Symptom | Likely cause | Fix |
 |---------|-------------|-----|
 | Entities always Unavailable | Device out of range or off | Check device is on and in range |
-| Entities always Unavailable | BLE disabled on unit | Press the IoT button on the device to re-enable it (indicator flashes rapidly when ready, solid when connected) |
+| Entities always Unavailable | BLE disabled on unit (**`TT`/Mega models**) | Press the IoT button on the device to re-enable it (indicator flashes rapidly when ready, solid when connected). The equivalent button sequence is not documented for Guardian / D5 V2 - see [the WP guide](../../docs/GUARDIAN-WP-BLE.md) |
+| Entities always Unavailable | Another poller (a second HA instance or script) holds the single BLE link | Only one BLE client is served; stop the other poller |
 | "BLE device not found" in logs | HA hasn't scanned recently | Check Bluetooth integration is running |
 | Entities always Unavailable | App open on phone | The device only allows one BLE connection at a time — force-stop the Cleanergy app or switch the phone's Bluetooth off, then wait for the next poll. Swiping the app away is often not enough; it can keep the connection. If the IoT indicator is solid but HA isn’t polling, another device is holding the connection. |
 | Cleanergy app can no longer reach the station | Home Assistant is holding the single BLE connection — normal while the entry is enabled | If you want the app back (a setting change, an over-the-air firmware update), **disable** the entry rather than deleting it: disabling frees the radio and keeps the entities, deleting costs them and the whole setup. To hand it back, force-close the app first, then re-enable. |
@@ -472,7 +495,7 @@ only if you deliberately want to program a new key.
 | "Cold-probe drop" repeated | BLE interference or device busy | Usually self-resolves on next poll |
 | Setup fails with ConfigEntryNotReady | Device not reachable at startup | HA will retry — power on the device |
 | Connects, then the link drops after ~4 s, on repeat | Guardian / D5 V2 (`WP`) station with no user ID stored | Re-add or reconfigure with the user ID the app paired; the startup log names the integration |
-| DC Input 1 / DC Input 2 Power do not exist | Not a Guardian / D5 V2 station | Those two entities are only created for the `WP` family, where attr 23 carries both inputs |
+| DC Input 1 Power / DC Input 2 Power do not exist | Not a Guardian / D5 V2 station | Those two entities are only created for the `WP` family, where attr 23 carries both inputs |
 
 Enable debug logging for more detail:
 
@@ -546,7 +569,10 @@ python debug_info/pair_device.py <MAC> --key <new_10_hex_char_key>
 
 The script replicates the exact BLE pairing protocol the Cleanergy app uses
 (AUTH → handshake polling → CLAIM with key + dummy MQTT token), with no cloud
-or app dependency. Typical pairing completes in one cycle (~18 seconds).
+or app dependency. On the **`TT`/Mega** family pairing completes in one cycle
+(~18 seconds, from the captured sequence). On `WP` stations this path does not
+complete - measured twice on a Guardian 6000 V2, both ending in a pairing timeout -
+which is why the matching UI option says not to use it there.
 
 All `debug_info/` paths are relative to the repo root (`oupes-mega-ble-hass/`).
 

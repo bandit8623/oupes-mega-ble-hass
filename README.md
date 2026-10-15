@@ -193,11 +193,16 @@ intended outcome, not a rivalry.
 >    until the phone lets go, and retrying changes nothing. Leave the app installed;
 >    it just cannot be the one holding the station.
 >
-> What to expect once you submit: about 15 seconds to connect, then roughly 44
-> entities. The two DC input sensors read *unknown* while nothing is plugged in —
-> that is correct, not a fault. And while Home Assistant holds the connection the
-> app cannot reach the station over Bluetooth: its cloud figures keep updating, but
-> live control from the app will not work.
+> What to expect once you submit: about 15 seconds to connect, then a few dozen
+> entities. The unit used for testing came up with 44. It is not a fixed number: this
+> family creates about 29 entities for the station itself plus five for every expansion
+> battery pack that reports (charge, input power, output power, runtime, temperature),
+> and the test unit has three packs fitted. The two DC input sensors read **0 W** while
+> there is no solar input. If you are on 1.4.4 or older they read *unknown* at zero
+> instead - that disagreement with the aggregate sensor was a real gap in this
+> integration, fixed after 1.4.4, and never a wiring fault. And while Home Assistant
+> holds the connection the app cannot reach the station over Bluetooth: its cloud
+> figures keep updating, but live control from the app will not work.
 
 The two OUPES families need different things, so pick the row that matches your
 station. If you do not know: the app calls it a **Guardian / D5 V2**, and it
@@ -245,9 +250,12 @@ So the order of operations is fixed by the hardware, not by preference:
 2. **Add it in the Cleanergy app first**, by Bluetooth with the phone next to the
    unit. That is what writes the pair into the station. Skip if it is already in the
    app.
-3. **Never remove it from the app afterwards.** Closing the app is enough to free
-   the radio; removing the station wipes the pairing Home Assistant authenticates
-   with, and re-adding rewrites it.
+3. **Do not remove it from the app afterwards.** Closing the app is enough to free
+   the radio. Removing the station also wiped the pairing Home Assistant authenticates
+   with on the unit tested here, and re-adding rewrote it. The vendor's unbind behaviour
+   was flaky in testing (the same removal did not always unbind - see the confidence
+   table in [the WP guide](docs/GUARDIAN-WP-BLE.md)), so the safe assumption is that it
+   wipes and you would have to pair again.
 4. **Use the same account in Home Assistant that the app paired with.** You will not
    find that number in the app - it does not display it anywhere, so do not spend the
    evening hunting for the screen. You normally do not need to know it at all, because
@@ -315,7 +323,8 @@ none. It is one number, and the key follows from it.
 If the station is brand new and you would rather never install the app: you cannot.
 Let it bind once, let Home Assistant take the pairing over, and the app can go away
 afterwards - though leave it installed and closed rather than removing the device from
-it, because removing wipes the pairing.
+it, because removal wiped the pairing on the unit tested here and there is no cheap way
+to get it back.
 
 ### Mega (`TT`) — no identity needed
 
