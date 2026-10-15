@@ -8,6 +8,45 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.5 - 2026-10-15
+
+Two behavioural fixes to the solar input data, both on the Guardian 6000 V2 / D5 V2
+(product id `95haDY`). Nothing changes for other models.
+
+- **Both DC inputs now report 0 W when nothing is producing, instead of `unknown`.**
+  The split of attr 23 into two uint16 halves used to fire only when the combined value
+  looked too large to be plain watts (>= 65536). Zero is not too large, so at night, on a
+  cloudy day, or with nothing plugged in, the aggregate sensor published 0 W while both
+  per-input sensors went Unknown. If your energy dashboard recorded gaps or a zero that
+  disagreed with its own two halves, this was the cause - it was never a wiring fault.
+  Once a field is known to be packed, 0 has exactly one decomposition, so the split is
+  now driven by the product id, never by the reading. It is enabled for `95haDY` alone:
+  the other WP-family ids have no capture proving their attr 23 is packed, and a wrong
+  entry here writes a wrong number onto someone's energy dashboard permanently.
+- **The two inputs are renamed on that product to `DC XT60 Input 1` and `DC XT60 Input 2`.**
+  The connector type is reported by the owner of the unit tested here, not read off the
+  wire, and it is attributed as such in the docs. Your `entity_id` does **not** change -
+  identity is derived from the sensor key, not the name - so dashboards, templates and
+  automations keep working and no history is orphaned. Only the display name changes, and
+  a fresh install will slug its entity_id from the new name, so copy entity ids from your
+  own Home Assistant rather than from a document. The two halves are independent readings
+  that usually differ (captured pairs include 1999 W / 2001 W and 647 W / 2002 W); the
+  only guarantee is that they sum to Solar Input Power. Which of the two identical XT60
+  sockets is Input 1 is still unverified - shade one string and watch which entity drops.
+- Docs: entity count is now stated as a rule (about 29 for the station plus five per
+  expansion pack that reports) instead of one unit's number; a stale "10 minutes" stale
+  timeout corrected to 15; claims about removing the station from the app, pairing
+  timings, and firmware versions scoped to what was actually observed; the wire-format
+  finding recorded (continuous telemetry uses TLV tag `0x0A`, so grepping a hex capture
+  for a dpid finds matches that are not real).
+- Shipped help: the `Cloud userId` route corrected to the entry's cog, then Configure;
+  an unreachable orphaned string block deleted; the "go back" checkbox given the label it
+  was missing.
+- New guards, all sabotage-verified: flow steps and fields must have real labels in both
+  string files; docs may not quote a stale timeout or poll interval; any line naming
+  XT60 must carry its provenance; the per-product rename must stay keyed by product id
+  and must not move `unique_id` off the sensor key.
+
 ## 1.4.4 - 2026-10-15
 
 Text and defaults only. No stored key, step id, or config key changes, so existing
