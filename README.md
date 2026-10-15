@@ -106,6 +106,25 @@ device over BLE and exposes sensors, switches, and settings entities.
 
 ## Installation
 
+### Before you install: can Home Assistant see Bluetooth?
+
+This is a Bluetooth integration. Home Assistant needs a Bluetooth radio it can use,
+and it has to be able to hear the station:
+
+- an adapter on the machine running Home Assistant, **or**
+- an [ESPHome Bluetooth proxy](https://esphome.io/components/bluetooth_proxy) — any
+  ESP32 — on the same Home Assistant instance, within range of the station.
+
+Whichever exists is used automatically, and a proxy is not a compromise: the install this
+README was written against runs in a Hyper-V VM with no Bluetooth adapter at all
+(`/sys/class/bluetooth` empty) and reaches the station through two ESP32 proxies. **BLE is
+the only path**, so before anything else in this document, check **Settings → Devices &
+Services → Bluetooth**: no adapter and no proxy there means no discovery card, no address to
+type, and no workaround, because the station exposes no local network protocol (see *WiFi:
+not an option on these models* below). Stations are commonly in garages and outbuildings, so
+the question is usually range rather than availability — an ESP32 near the unit solves it for
+less than the cost of a cable run.
+
 ### HACS (custom repository)
 
 1. Open **HACS → Integrations**.
@@ -115,9 +134,13 @@ device over BLE and exposes sensors, switches, and settings entities.
 5. Restart Home Assistant — required, HACS only swaps the files on disk.
 6. Add the station: accept the Bluetooth discovery card (or add it manually), then
    follow **Choose pairing method** and **Connection settings**. On a Guardian /
-   D5 V2 pick **Use my Cleanergy user ID** and enter the user ID the
-   app paired the station with - the integration derives the binding key from it,
-   so there is no key to capture and no openid to hunt for.
+   D5 V2 pick **Fetch key from Cleanergy cloud account** and sign in with the same email
+   address and password the app uses. That single request fetches the account's numeric user
+   ID and Home Assistant derives the binding key from it - there is no key to capture and no
+   openid to hunt for. Do **not** start with **Use my Cleanergy user ID** on a first install
+   unless you already know the number: the Cleanergy app does not display it on any screen,
+   so the field has nothing to be filled in from. An existing entry shows the value it
+   fetched under **Configure** (the cog), which is where that field is useful later.
 7. Check the entities. Telemetry normally appears within ~20 s. If it does not,
    the station is almost certainly still being held by the phone: force-stop the
    Cleanergy app or switch the phone's Bluetooth off, because the station answers
@@ -209,6 +232,25 @@ station. If you do not know: the app calls it a **Guardian / D5 V2**, and it
 advertises the BLE name `WP`. A **Mega** advertises `TT`.
 
 ### Guardian / D5 V2 (`WP`) — needs the user ID, once
+
+> **The email address is not the user ID.** Two different account values appear in these
+> pages, and conflating them is the most common way to get stuck:
+>
+> | Value | What it is | Where it is used |
+> | --- | --- | --- |
+> | **Email address** | the address you log in to the Cleanergy app with | the **Fetch key from Cleanergy cloud account** screen, with the password. One request; it is not stored and it never reaches the station |
+> | **User ID** | a **numeric** id the vendor stores for that address — five digits on the account measured here | fetched for you by the cloud request above. The binding key is `md5(user ID)` truncated to 10 characters |
+>
+> The user ID is a number, **not** your email address. The field says so by refusing anything
+> that is not a number, and that is deliberate: the Bluetooth key is an MD5 over the *number*,
+> so an address would derive a key the station refuses. The app displays the number nowhere,
+> which is exactly why the cloud request exists instead of a "go and read it in the app" step.
+> After a successful setup, an existing entry shows the value it fetched under **Configure**
+> (the cog on the OUPES card).
+
+The cloud-account path was verified on a second Guardian 6000 V2 installed from
+scratch by a different user: Bluetooth transport, key fetched by signing in to the
+Cleanergy account during setup, paired on the first attempt.
 
 These stations put the owner's account identity *inside* the Bluetooth
 authentication frame. Without it the station answers the AUTH packet and then drops
