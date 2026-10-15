@@ -32,27 +32,33 @@ Two values. That is all.
 
 | Value | Example | Where it comes from |
 | --- | --- | --- |
-| **Bluetooth address** | `AA:BB:CC:DD:EE:FF` | The station's own MAC. Your proxy's device list, or the app's device page. |
-| **Account number** | `24680` | Your Cleanergy account id. The app shows it in the account screen; a password login returns it as `uid` (see §3). |
+| **Bluetooth address** | `AA:BB:CC:DD:EE:FF` | The station's own MAC. Your proxy's device list, or Home Assistant's discovered-device list. The station advertises as `WP`. |
+| **User ID** | `24680` | Numeric id of the Cleanergy account that paired the station. The app does not show it anywhere - §3 gives two ways that do. |
 
-The device key is not a third thing to hunt for. It is `md5(account number)`
+The device key is not a third thing to hunt for. It is `md5(user ID)`
 truncated to ten characters, which this integration computes for you (§4). The
 station was written with exactly that pair when the app paired it.
 
 **There is no openId requirement.** This was measured rather than assumed: a
-Guardian 6000 V2 received its real key and real account number with the openId
+Guardian 6000 V2 received its real key and real user ID with the openId
 field **zero-filled**, and answered with 43 telemetry frames. The same frame with
-the *account number* wrong was refused. So the station checks the key and the
-account number and ignores the openId completely.
+the *user ID* wrong was refused. So the station checks the key and the
+user ID and ignores the openId completely.
 
 That is worth stating bluntly, because the openId is the value that made this
 station look un-supportable for months. It looks like a WeChat openid, it is
 returned by no email-and-password API, and it was never needed.
 
-## 3. Getting your account number
+## 3. Getting your user ID
 
-In the app: the account screen shows the account id. If you would rather read it
-from the vendor API than trust a screen, it is the same API the app uses:
+**The Cleanergy app does not display this number.** There is no account screen, no
+device page, nothing that shows it - so do not spend an evening hunting for one. Two
+ways that do work:
+
+* **From an entry you already have working.** The cog on the OUPES card →
+  **Configure**, and read the **Cloud userId** field. It comes pre-filled with the
+  value in use, so a station that is already paired tells you its own number.
+* **From the vendor API**, which is the same call the app itself makes:
 
 ```
 POST http://api.upspowerstation.top/api/app/user/login
@@ -71,8 +77,8 @@ otherwise cost you an hour:
   you do not trust, and do not paste a response into a public issue.
 
 You normally never need to make this call. Home Assistant's **Use my Cleanergy
-account number** option asks for the number directly, and **Fetch key from your
-account** (§5) logs in and reads it for you.
+account number** option asks for the number directly, and **Fetch key from Cleanergy
+cloud account** (§5) logs in and reads it for you.
 
 ### Why there used to be a second value here
 
@@ -123,17 +129,22 @@ Practical consequences:
 
 ## 5. Which pairing screen to use
 
-**Settings → Devices & Services → Add Connection → OUPES Mega BLE → Specify
-manually → Other / already-paired device → Use my Cleanergy account number.**
+**Settings → Devices & Services.** If an adapter or proxy in range can hear the
+station, it sits under **Discovered**: click **Add**, then **Submit** on the "Found
+*name* (address) nearby" confirmation. If it is not listed there, use **Add
+Integration → OUPES Mega BLE** and type the address into **Bluetooth MAC Address** -
+when a nearby adapter did see the station, that field arrives pre-filled.
 
-Enter the Bluetooth address and the account number from §2. The key is derived
-from the number, and nothing is written to the station: the app already left the
-matching pair there.
+Either route lands on **How would you like to provide the device key?**. Pick **Use my
+Cleanergy account number** and enter the user ID from §3, or pick **Fetch key from
+Cleanergy cloud account** and sign in, which looks the number up for you. Either way
+the key is derived from the number, and nothing is written to the station: the app
+already left the matching pair there.
 
 The other options on that screen, honestly described:
 
-* **Fetch key from your account** — same result, fewer things to look up. It logs
-  in with your email and password, reads your account number out of the login
+* **Fetch key from Cleanergy cloud account** — same result, fewer things to look up.
+  It logs in with your email and password, reads your user ID out of the login
   response and derives the key. It needs the station to be in that account's
   device list. Your password is used once and is never written to disk.
 * **Enter an existing device key** — for the case where the key is not the
@@ -159,7 +170,7 @@ Both want the single Bluetooth connection, and the station only grants one.
 | --- | --- |
 | HA entry loaded, app open | App never gets past "connecting" |
 | App holds the link | HA reports connection failures until the app releases it |
-| **You remove the station in the app** | The station forgets the `(account number, key)` pair it was written with. HA's credentials are now stale and it cannot get back in |
+| **You remove the station in the app** | The station forgets the `(user ID, key)` pair it was written with. HA's credentials are now stale and it cannot get back in |
 | You re-add the station in the app | The app writes a pair derived from that account's number, which is the same pair if it is the same account |
 
 > **Add the station in the app once, then never remove it.** To stop the app
@@ -168,7 +179,7 @@ Both want the single Bluetooth connection, and the station only grants one.
 > pairing Home Assistant depends on, and the failure looks nothing like its cause:
 > HA keeps a connected-looking entity and stale values until you try to re-pair.
 
-Because the key is a pure function of the account number, re-adding the station to
+Because the key is a pure function of the user ID, re-adding the station to
 the **same** account restores the same key, and an entry written with that number
 recovers on its own after a reload. Re-adding to a **different** account changes
 it, and the old entry is then simply wrong.
@@ -205,8 +216,8 @@ Over the air updates are the vendor app's job, so this day may come. The sequenc
 
 If the update rotates the key, the symptom after step 3 is HA connecting and then
 getting no telemetry. Fix it by re-adding the station to the same account in the app
-and re-running the setup with that account number - or just re-enable first and see,
-because the key is derived from the account number and an update that changes it
+and re-running the setup with that user ID - or just re-enable first and see,
+because the key is derived from the user ID and an update that changes it
 would have to change that derivation too. Nobody has seen this happen; the reason to
 write it down is that the failure looks like a broken integration and is not.
 
@@ -241,8 +252,8 @@ To get a station into the state where an outside claim can succeed you need it
   and the combination that produced a fast blink turned the station **off** instead.
 * A factory-reset station still refuses identities it did not get from the vendor, so
   "reset and claim with a key I invented" is not a working path. What it checks is
-  the pair: it accepts the account number and key the app wrote, and refuses an
-  invented account number carrying its own correct `md5`. That second measurement is
+  the pair: it accepts the user ID and key the app wrote, and refuses an
+  invented user ID carrying its own correct `md5`. That second measurement is
   what rules out the station simply recomputing the hash and comparing, so the pair
   really is stored in the station, and the app is the only thing that writes it.
 
@@ -275,7 +286,7 @@ authentication means it heard you and refused the identity.
 
 The integration's options also offer **Log raw frames** and **Log attributes**, which
 append to CSV files under the config directory. Reach for `raw` last: that file
-contains the AUTH frame, so it holds your account number in the clear.
+contains the AUTH frame, so it holds your user ID in the clear.
 
 ---
 
@@ -305,7 +316,7 @@ people ask about:
 * Your userId, openId and device key are stored in Home Assistant's config entry,
   which lives on disk in `.storage` in clear text. Anyone with access to your Home
   Assistant configuration has them.
-* The account number plus its `md5` prefix is enough to control the station over
+* The user ID plus its `md5` prefix is enough to control the station over
   Bluetooth. The number is not a secret in the usual sense, since an app you own
   displays it, but it is the only input the key needs, so treat it as a username
   that must not leak rather than as a harmless integer. Do not post real values in

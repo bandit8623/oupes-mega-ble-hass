@@ -41,12 +41,12 @@
     },
     "error": {
       "cloud_identity_login_failed": "Sign-in to the Cleanergy cloud failed. Check the email and password, or go back and choose a different method. Credentials are used once and never stored.",
-      "cloud_identity_no_open_id": "Signed in and found the station, but the vendor's records for it did not include an account number, which is the value the Bluetooth key is derived from. The Home Assistant log names the fields that were present, so you can tell an account without one from a vendor that renamed it. You can enter the account number yourself - the Cleanergy app shows it on the device's settings screen - or switch back and enter a device key you already have.",
+      "cloud_identity_no_open_id": "Signed in and found the station, but the vendor's records for it did not include the numeric user ID that the Bluetooth key is derived from. The Home Assistant log names the fields that were present, so you can tell an account without one from a vendor that renamed the field. If you know the number, type it in above; if not, switch back and enter a device key you already have.",
       "cloud_identity_no_user_id": "Signed in and found the station, but the numeric account id (userId) could not be read from the response. Try again; if it keeps happening, enter openId and userId yourself instead.",
       "cloud_identity_not_bound": "This station is not in that account's device list. Add it in the Cleanergy app first — a Guardian / D5 V2 only carries the account identity after the app has bound it — then try again.",
       "invalid_device_key": "Device key must be exactly 10 hexadecimal characters (e.g. bd236b1695).",
       "invalid_open_id": "openId must be 32 ASCII characters or fewer - that is all the station's AUTH frame can carry.",
-      "invalid_user_id": "That is not a usable account number. It is the numeric id of the Cleanergy account the station was paired with - the vendor app shows it in the account screen, and a password login returns it as `uid`."
+      "invalid_user_id": "That is not a usable user ID. It is the numeric id of the Cleanergy account the station was paired with, and it is not shown anywhere in the Cleanergy app. An existing entry in Home Assistant reports it - open the cog on the OUPES card, then Configure - and a vendor password login returns it as `uid`."
     }
   },
   "config": {
@@ -208,7 +208,7 @@
     "error": {
       "already_configured_address": "Another OUPES Mega entry already uses that Bluetooth address.",
       "cloud_identity_login_failed": "Sign-in to the Cleanergy cloud failed. Check the email and password, or go back and choose a different method. Credentials are used once and never stored.",
-      "cloud_identity_no_open_id": "Signed in and found the station, but the vendor's records for it did not include an account number, which is the value the Bluetooth key is derived from. The Home Assistant log names the fields that were present, so you can tell an account without one from a vendor that renamed it. You can enter the account number yourself - the Cleanergy app shows it on the device's settings screen - or switch back and enter a device key you already have.",
+      "cloud_identity_no_open_id": "Signed in and found the station, but the vendor's records for it did not include the numeric user ID that the Bluetooth key is derived from. The Home Assistant log names the fields that were present, so you can tell an account without one from a vendor that renamed the field. If you know the number, type it in above; if not, switch back and enter a device key you already have.",
       "cloud_identity_no_user_id": "Signed in and found the station, but the numeric account id (userId) could not be read from the response. Try again; if it keeps happening, enter openId and userId yourself instead.",
       "cloud_identity_not_bound": "This station is not in that account's device list. Add it in the Cleanergy app first — a Guardian / D5 V2 only carries the account identity after the app has bound it — then try again.",
       "cloud_login_failed": "Cloud login failed. Check the email and password, and make sure this is the account the station was added to. You can also go back and try a different method.",
@@ -216,7 +216,7 @@
       "invalid_address": "Invalid Bluetooth MAC address format. Use XX:XX:XX:XX:XX:XX.",
       "invalid_device_key": "Device key must be exactly 10 hexadecimal characters (e.g. bd236b1695).",
       "invalid_open_id": "openId must be at most 32 characters - it is written into a fixed-size field of the authentication packet.",
-      "invalid_user_id": "That is not a usable account number. It is the numeric id of the Cleanergy account the station was paired with - the vendor app shows it in the account screen, and a password login returns it as `uid`.",
+      "invalid_user_id": "That is not a usable user ID. It is the numeric id of the Cleanergy account the station was paired with, and it is not shown anywhere in the Cleanergy app. An existing entry in Home Assistant reports it - open the cog on the OUPES card, then Configure - and a vendor password login returns it as `uid`.",
       "pairing_connection_failed": "Could not connect to the device. Make sure no other app (e.g. Cleanergy) is connected and the device is in pairing mode.",
       "pairing_device_not_found": "Device not found via Bluetooth. Make sure the device is powered on, in range, and in pairing mode (hold IoT button 5 seconds until rapid flash).",
       "pairing_timeout": "Pairing did not complete. Try again — make sure the device is in pairing mode (hold IoT button 5 seconds until rapid flash). The device may need a moment after the reset before it accepts pairing.",

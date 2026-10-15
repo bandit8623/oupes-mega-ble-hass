@@ -5,7 +5,7 @@ power stations. Connects via BLE (continuous or polled) and exposes sensors,
 binary sensors, toggle switches, and writable device settings — all with no cloud
 dependency. This build is labelled for and tested on the **Guardian 6000 V2**;
 see [Guardian / D5 V2 stations](#guardian--d5-v2-stations-ble-name-wp) for what
-those units additionally need (the account number it was paired with) and how they
+those units additionally need (the user ID it was paired with) and how they
 differ.
 
 ---
@@ -72,12 +72,12 @@ Tested on a single Guardian 6000 V2 with two expansion battery packs.
 #### Which pairing method to choose
 
 **Use my Cleanergy account number** is the one to pick on a `WP` station. The binding
-key is `md5(account number)` truncated to ten characters, which is how the official
+key is `md5(user ID)` truncated to ten characters, which is how the official
 app generates it, so the number is the whole credential and nothing has to be
 captured, looked up or pasted.
 
 **Fetch key from your account** does the same thing one step further removed: it
-logs in with your email and password, reads the account number out of the login
+logs in with your email and password, reads the user ID out of the login
 response and derives the key. Two things to know:
 
 - **The password is not stored.** It goes into one request and is discarded; the
@@ -105,10 +105,12 @@ order:
 2. Make sure the station has been added in the Cleanergy app at least once, because
    that is what writes the identity into it. Then turn the phone's Bluetooth off, or
    force-stop the app: the station answers one Bluetooth client at a time.
-3. Add the station: accept the Bluetooth discovery card (or add it manually), choose
-   **Use my Cleanergy account number** on the pairing-method screen, enter the account
-   number the app paired with, then fill in **Connection settings**. Nothing is
-   written to the station; it authenticates with the pair the app left behind.
+3. Add the station: accept the Bluetooth discovery card (or add it manually). On the
+   pairing-method screen choose **Fetch key from Cleanergy cloud account** and sign in
+   with the email you use in the app - that reads your user ID and derives the key,
+   and the password is not stored. Or choose **Use my Cleanergy account number** and
+   type the user ID directly. Then fill in **Connection settings**. Neither path writes
+   anything to the station; it authenticates with the pair the app left behind.
 4. Telemetry normally appears within about twenty seconds of the entry loading.
 
 The options dialog still carries **Cloud userId** and **Cloud openId** fields for
@@ -447,7 +449,7 @@ only if you deliberately want to program a new key.
 | Settings entities blank/unknown | Frequent connection gaps | Enable debug raw logging and check for gaps >2 min — indicates BLE range issues |
 | "Cold-probe drop" repeated | BLE interference or device busy | Usually self-resolves on next poll |
 | Setup fails with ConfigEntryNotReady | Device not reachable at startup | HA will retry — power on the device |
-| Connects, then the link drops after ~4 s, on repeat | Guardian / D5 V2 (`WP`) station with no account number stored | Re-add or reconfigure with the account number the app paired; the startup log names the integration |
+| Connects, then the link drops after ~4 s, on repeat | Guardian / D5 V2 (`WP`) station with no user ID stored | Re-add or reconfigure with the user ID the app paired; the startup log names the integration |
 | DC Input 1 / DC Input 2 Power do not exist | Not a Guardian / D5 V2 station | Those two entities are only created for the `WP` family, where attr 23 carries both inputs |
 
 Enable debug logging for more detail:
