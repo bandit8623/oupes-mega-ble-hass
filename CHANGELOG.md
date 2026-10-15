@@ -8,6 +8,36 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.6 - 2026-10-15
+
+One behavioural change, warn-only: a hand-typed user ID that looks like a typed
+placeholder now says so in the log at the moment it is accepted, instead of failing
+later as a Bluetooth mystery. Nothing else moves; v1.4.5 installs upgrade in place.
+
+- **Placeholder-shaped user IDs are named in the log.** The binding key is
+  `md5(user ID)` truncated to ten characters, so a wrong typed ID still derives a
+  perfectly well-formed key - the station refuses it about four seconds after AUTH,
+  which reads exactly like a range problem. Now all three places that accept a
+  hand-typed user ID (the account-number step, the manual identity step, and
+  Configure/options) emit one WARNING explaining the shape problem and how to fix
+  it. Cloud-fetched IDs are not judged: the vendor supplied those.
+- **The check can warn; it cannot lock out.** Only strictly ascending or descending
+  digit runs (`123`, `4321`) are flagged. Repeated digits (`999`) and short IDs stay
+  plausible, and `0` keeps its "not set" meaning - a hard reject would be an account
+  lockout for whoever holds the earliest account on the platform, which is the
+  failure mode the v1.4.6 gap file argued about in advance.
+- **The warning never echoes the number.** The user ID is the seed of that
+  station's Bluetooth credential, so the log line describes the shape (`4-digit
+  descending run`) and not the value - the same discipline as the field-name-only
+  diagnostics in the cloud identity code. Pinned by a test.
+- Docs: the second-user field test is recorded in the pairing section - a Guardian
+  6000 V2 installed from scratch by a different user, over Bluetooth, authenticating
+  with the same credentials they use to log into the official OUPES/Cleanergy app,
+  paired on the first attempt.
+- The three strict-xfail gap tests that drove this release were deleted with the
+  fix, as `tests/test_known_gaps_for_1_4_6.py` instructed; they now stand as
+  ordinary regression tests.
+
 ## 1.4.5 - 2026-10-15
 
 Two behavioural fixes to the solar input data, both on the Guardian 6000 V2 / D5 V2
