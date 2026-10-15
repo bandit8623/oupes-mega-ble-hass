@@ -24,13 +24,13 @@
           "debug_raw_logging": "Log every raw BLE packet (TX and RX) with direction and command classification to a CSV in your HA config folder. Useful for diagnosing missing settings responses.",
           "open_id": "Only for stations that advertise the BLE name WP - the Guardian / D5 V2 family, e.g. the Guardian 6000 V2. Enter the openId of the Cleanergy/OUPES account that owns the station (it is in the cloud device record). Leave empty for TT stations such as the Mega 1.",
           "user_id": "Numeric user id of the same Cleanergy/OUPES account, returned by the cloud login. Required together with the openId on WP stations; leave at 0 for TT stations. Changing either value re-pairs the station."
-        },
-        "error": {
-          "invalid_device_key": "Device key must be exactly 10 hexadecimal characters (e.g. bd236b1695).",
-          "invalid_open_id": "openId must be plain ASCII and at most 32 characters.",
-          "invalid_user_id": "userId must be a positive number not larger than 1099511627775."
         }
       }
+    },
+    "error": {
+      "invalid_device_key": "Device key must be exactly 10 hexadecimal characters (e.g. bd236b1695).",
+      "invalid_open_id": "openId must be plain ASCII and at most 32 characters.",
+      "invalid_user_id": "userId must be a positive number not larger than 1099511627775."
     }
   },
   "config": {
