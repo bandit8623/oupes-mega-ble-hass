@@ -50,12 +50,21 @@ def test_strings_and_en_agree():
 def test_every_cloud_identity_reason_is_translatable():
     for key in reason_keys():
         for section, step in ERROR_SITES:
-            errors = STRINGS[section]["step"][step]["errors"]
-            assert key in errors, (
-                f"{section}.step.{step}.errors.{key} is missing. The flow emits it via "
+            # Flow level, not step level: HA resolves errors at
+            # component.<domain>.<flow>.error.<key>, and the step name in errors[...] only
+            # chooses which field the message renders under. This test used to read
+            # step.<step>.errors.<key>, which meant it went green while the wording it was
+            # protecting could never be displayed - a test that enforces the wrong location
+            # is worse than no test, because it argues the layout is intentional.
+            where = STRINGS[section]["error"]
+            assert "errors" not in STRINGS[section]["step"][step], (
+                f"{section}.step.{step}.errors exists; hassfest rejects it and HA ignores it"
+            )
+            assert key in where, (
+                f"{section}.error.{key} is missing. The flow emits it via "
                 'f"cloud_identity_{reason}", so the user reads the key verbatim.'
             )
-            text = errors[key]
+            text = where[key]
             assert text != key, f"{key} maps to itself - that renders as a raw key"
             assert len(text) > 40, f"{key} is too short to explain anything: {text!r}"
 

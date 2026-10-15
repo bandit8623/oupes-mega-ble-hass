@@ -8,6 +8,107 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.3 - 2026-10-14
+
+### The error strings were filed where Home Assistant never looks
+
+Home Assistant resolves a config-flow error at
+`component.<domain>.<flow>.error.<key>`. The key inside `errors[...]` names the *field* the
+message renders under; it does not move the lookup path. Error blocks nested under a step are
+therefore dead text, and hassfest rejects them as
+`not a valid option at 'options.step.init.error'` - the failure that was red on the upstream
+PR all day.
+
+Twenty-five strings across eight steps were in that state, in **two spellings**: `error`
+(singular: three config steps plus the options flow) and `errors` (plural: six steps). So the
+wording written for a failed cloud login, an unusable account number, a refused key and an
+unconfirmed local claim had never displayed once - including the openId sentence reworded in
+1.4.1, which went into a location no code path opens.
+
+- Where nested and flow-level wording collided, **nested wins deliberately**: the flow-level
+  text still told people to "enter openId and userId manually", the myth this work disproved,
+  while the nested text reflected what the station actually does.
+- `wifi_unsupported_guardian` was raised from two steps with two different texts. HA allows one
+  string per key per flow, so they are merged instead of one losing quietly.
+- `no_device_key` and `required` carried translations for messages no code path emits. Deleted.
+- `validate.yml` now runs on `push` to `main`/`release`, not only `pull_request`. A branch that
+  opens no PR was never hassfest-validated - which is how this survived a release cycle with a
+  green tests workflow. The workflow was right; it was asked the wrong question.
+- Issues were disabled on the fork since its creation. That, not the code, is what HACS
+  validation was failing on, and it also meant the compatibility-report template other owners
+  need could not be reached. Enabled.
+
+### Added: `tests/test_strings_against_hassfest.py`
+
+A local subset of Home Assistant's own `script/hassfest/translations.py` schema - the file that
+emits the rejection message. Asserts step bodies contain only keys HA reads (whitelist, not a
+list of the spellings already noticed), every `data_description` key has a matching field,
+placeholders are valid identifiers, and every key the flow can raise resolves at flow level in
+both `strings.json` and `translations/en.json`. Runtime-built keys
+(`f"cloud_identity_{reason}"`, `self._pairing_error`) are derived from the real constants.
+
+### Tooling
+- `scripts/preflight.py`: one command to run before any commit or push. Tests (both pytest and
+  the standalone CI path), module compilation, JSON validity, manifest version against the newest
+  changelog header, secret scan of **tracked** files against a list kept outside the repository,
+  tracked build junk, workflow triggers, and `--remote` for the repository settings HACS validates
+  (which is what its failure was actually about). It refuses with exit 1 and named failures.
+
+  Verified by sabotage rather than by optimism: nested `error`, nested `errors`, a version bump
+  with no changelog entry, a committed credential, and a removed CI trigger all produce failures.
+
+**The last test feeds both real bugs plus three invented ones back through the checkers and
+requires rejection**, because round one fixed `error`, scanned for `error`, and wrote a test for
+`error`; round two found `errors`, which neither the scan nor the test looked for. A checker that
+cannot fail is the same failure as the diagnostic sensor that was documented but never existed.
+`test_every_cloud_identity_reason_is_translatable` was itself reading `step.<step>.errors.<key>`
+- a test enforcing the wrong location, which is affirmative evidence the layout was intentional.
+Retargeted at flow level, and now asserts the nested block is absent.
+
+## 1.4.2 - 2026-10-14
+
+### Editing the account number kept the stale device key
+
+The options form shows the device key and the account number on the same screen, and saving did
+`raw_key or current_key`. Type a new account number - which is what you do after re-pairing the
+station to a different Cleanergy account - leave the key box at the value already in it, and you
+stored the **old** key next to the **new** account number. The station authenticates against the
+`(account number, key)` pair the vendor app wrote, so it refused the frame, and the failure looked
+exactly like the app having failed to re-pair. Nothing in the UI said a second field was still
+holding an old credential.
+
+Extracted as `resolve_key_on_account_change()`: a typed key always wins; a stored key is replaced
+**only** when it equals `md5(previous account number)[:10]`, the only way to know we made it; with
+no previous account number its provenance is unknown, so it is kept rather than guessed about; and
+with no stored key at all, deriving beats storing nothing. Nine tests, two of which exist to prove
+something is *not* overwritten.
+
+## 1.4.1 - 2026-10-14
+
+### Stop shipping the claim we disproved, and mark what we do not know
+
+Three things in 1.4.0 were wrong, found by reading the release against the measurements instead
+against the earlier drafts.
+
+- The coordinator tested `not (open_id and user_id)` and so warned on **every** account-number
+  setup that the station "needs the cloud openId" - firing on the exact path that proves openId is
+  irrelevant. Now tests `not user_id` only, and instead warns when a WP station connects and drops
+  immediately, which is the signature of a rejected identity.
+- `docs/GUARDIAN-WP-BLE.md` described a diagnostic sensor with frame counters **that has never
+  existed**. Removed. Two other doc claims were wrong the same way: expansion count is derived from
+  the packs that report rather than read from a register, and the aggregate solar register is the
+  *sum* of the two DC inputs, not a suppressed duplicate.
+- The README stated openId as a requirement, contradicting the same release's headline finding.
+
+### Added
+
+- `docs/GUARDIAN-WP-BLE.md` **section 12, "How much of this is actually known"**: every claim, how
+  it was established, and where it stops being safe - naming the n=1 scope (one Guardian 6000 V2,
+  firmware 1.2.0, one account) instead of letting confident prose imply generality.
+- A **compatibility-report issue template**, the only way the verified-models table grows past one
+  row: model, firmware, product id, BLE name, how it was set up, whether the derived key was
+  accepted, whether openId was needed.
+
 ## 1.4.0 - 2026-10-14
 
 ### The station never checked the openId, and the key is a hash of the account number
