@@ -171,6 +171,27 @@ intended outcome, not a rivalry.
 > device key is derived, what the station's Bluetooth frames mean when it refuses you,
 > and why the Cleanergy app and Home Assistant cannot both hold the station.
 
+> **Before you start — do these in this order.**
+>
+> 1. **Add the station in the Cleanergy app first**, by Bluetooth, phone next to the
+>    unit. Home Assistant does not pair these stations; it reuses the pairing your
+>    phone already made, and the credential it uses is derived from *your* Cleanergy
+>    account. A station that has never been added to the app under your account has
+>    no key for Home Assistant to derive, and it will refuse every connection.
+> 2. **Use the same account here as in the app.** During setup, choose **Fetch key
+>    from Cleanergy cloud account** and sign in with that email address. It is a
+>    one-time request and the password is not stored.
+> 3. **Never remove the station from the app afterwards.** Re-pairing is only
+>    possible from the app, and a factory reset means starting over there. Deleting
+>    the Home Assistant entry is safe and reversible; removing the station from the
+>    app is not.
+>
+> What to expect once you submit: about 15 seconds to connect, then roughly 44
+> entities. The two DC input sensors read *unknown* while nothing is plugged in —
+> that is correct, not a fault. And while Home Assistant holds the connection the
+> app cannot reach the station over Bluetooth: its cloud figures keep updating, but
+> live control from the app will not work.
+
 The two OUPES families need different things, so pick the row that matches your
 station. If you do not know: the app calls it a **Guardian / D5 V2**, and it
 advertises the BLE name `WP`. A **Mega** advertises `TT`.

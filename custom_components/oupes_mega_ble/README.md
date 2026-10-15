@@ -97,8 +97,6 @@ code path is how the older `TT` stations are set up.
 
 #### Where to enter them — order matters
 
-#### Where to enter them — order matters
-
 These two fields live in the integration's **options**, not in the setup flow, so
 the dialog that holds them does not exist until the station has been added. In
 order:
@@ -156,7 +154,7 @@ catalog. Add it as a custom repository:
 
 1. Open **HACS → Integrations**.
 2. Open the three-dot menu and select **Custom repositories**.
-3. Enter `https://github.com/acalcutt/oupes-mega-ble-hass`.
+3. Enter `https://github.com/bandit8623/oupes-mega-ble-hass`.
 4. Select **Integration**, click **Add**, and install **OUPES Mega BLE**.
 5. Restart Home Assistant.
 
@@ -175,9 +173,9 @@ Bluetooth proxy, add a proxy nearer to it rather than reaching for WiFi.
 ### Step 1 — Device discovery
 
 **Automatic (recommended):** If your OUPES Mega is powered on and in Bluetooth
-range, HA auto-discovers the `TT` BLE advertisement and shows a **"New device
-discovered"** notification. Click it, confirm the device name and MAC, and
-click **Submit**.
+range, HA auto-discovers the `TT` or `WP` advertisement — Guardian / D5 V2
+stations advertise as `WP` — and shows a **"New device discovered"**
+notification. Click it, confirm the device name and MAC, and click **Submit**.
 
 **Manual:** Go to **Settings → Devices & Services → + Add Integration →
 OUPES Mega** and enter the Bluetooth MAC address (e.g., `8C:D0:B2:A7:EC:AF`).
@@ -189,9 +187,22 @@ OUPES Mega** and enter the Bluetooth MAC address (e.g., `8C:D0:B2:A7:EC:AF`).
 
 After discovery, the integration asks you to choose how to provide the
 **device key** — a 10-character hex string the device uses to authenticate BLE
-sessions. You'll see three options:
+sessions. The screen offers four options, listed in this order:
+
+1. **Use my Cleanergy account number** — see
+   [Which pairing method to choose](#which-pairing-method-to-choose) above. This
+   is the one for Guardian / D5 V2 (`WP`) stations.
+2. **Fetch key from Cleanergy cloud account** — detailed in Option C below.
+3. **Enter an existing device key** — detailed in Option B below.
+4. **Create a new device key (requires factory reset)** — detailed in Option A
+   below, and the one `WP` stations must not use.
+
+The headings below keep their original letters, so older links to them still
+work; the order on screen is the list above.
 
 #### Option A — Create New Key (BLE pairing)
+
+*On screen: "Create a new device key (requires factory reset)".*
 
 Pairs the device with a new key directly over BLE, with no cloud or app
 dependency. This replicates the Cleanergy app's pairing protocol.
@@ -205,10 +216,17 @@ dependency. This replicates the Cleanergy app's pairing protocol.
 4. Click **Submit** — a progress spinner appears while pairing runs (~20 s).
 5. When pairing completes, the integration is ready.
 
-> This is the best option if you're setting up from scratch, taking ownership
-> of a used unit, or don't want to use the Cleanergy cloud at all.
+> On `TT`-family stations this is the best option when setting up from scratch,
+> taking ownership of a used unit, or avoiding the Cleanergy cloud entirely.
+>
+> **Do not use it on a Guardian / D5 V2 (`WP`) station.** That family only
+> authenticates the pairing the Cleanergy app wrote into it, so a key created
+> here leaves the station silent. It is offered because the same code path sets
+> up the older stations.
 
 #### Option B — Enter Existing Key
+
+*On screen: "Enter an existing device key".*
 
 Enter a device key you already know — for example, from a previous setup, a
 btsnoop capture, or `adb logcat` output from the Cleanergy app.
@@ -216,6 +234,8 @@ btsnoop capture, or `adb logcat` output from the Cleanergy app.
 The key must be exactly 10 lowercase hex characters (e.g., `bd236b1695`).
 
 #### Option C — Fetch from Cleanergy Cloud
+
+*On screen: "Fetch key from Cleanergy cloud account".*
 
 Log in with your Cleanergy account credentials. The integration calls the
 OUPES cloud API (`api.upspowerstation.top`) to fetch the device key

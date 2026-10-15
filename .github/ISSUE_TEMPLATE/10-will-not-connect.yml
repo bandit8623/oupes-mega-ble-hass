@@ -22,6 +22,26 @@ body:
         addresses are fine to post if you need to, but they are not required here.
 
   - type: dropdown
+    id: app_pairing
+    attributes:
+      label: Is the station currently added to the Cleanergy app, under the account you used here?
+      description: >
+        Start here. These stations authenticate with an identity the **app** writes
+        during pairing, and Home Assistant derives its key from your Cleanergy account.
+        A station that is not in the app under the same account cannot connect, and no
+        setting in Home Assistant will change that. If you removed it from the app, or
+        factory-reset it, re-pair in the app first.
+      options:
+        - "Yes - it is in the app, same account I signed in with here"
+        - "It is in the app, but under a different account"
+        - "I removed it from the app / re-paired it recently"
+        - "Factory reset (held the IoT button ~5 s), then re-paired in the app"
+        - "Never been in the app"
+        - "Not sure"
+    validations:
+      required: true
+
+  - type: dropdown
     id: ble_name
     attributes:
       label: What BLE name does the station advertise?
