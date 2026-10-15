@@ -193,6 +193,30 @@ _CAR_PORT_POWER_NAMES: dict[str, str] = {
 }
 
 
+# -- Per-product display names ------------------------------------------------
+# Keyed by product id, NOT by series, because these names make a claim about plastic on
+# the case.  Renaming the whole `guardian` series would tell the owner of some other
+# WP-model station that their inputs are XT60 when nobody has looked at their unit.
+# Adding an entry here requires someone who has seen that station, and the attribution has
+# to sit within a few lines of the shipped string - tests/test_connector_claims_are_
+# attributed.py enforces that, which is the whole reason it is written this way.
+#
+# Only the name changes.  unique_id is built from `key`, so existing installs keep their
+# entity_id (and therefore their dashboards) and pick up the new friendly name in place.
+#
+# These two names are bare (no "Power" suffix) because the watt unit and device_class
+# already say what the number is.  The base descriptions in SENSOR_DESCRIPTIONS deliberately
+# KEEP their "Power" suffix: those names are what a fresh install on some other WP-model
+# station slugs into an entity_id, and docs elsewhere quote `dc_input_1_power`. Renaming
+# them would move entity_ids on stations nobody has inspected, for a cosmetic reason.
+_PRODUCT_SENSOR_NAMES: dict[str, dict[str, str]] = {
+    "95haDY": {  # Guardian 6000 V2 / D5 V2 - connector is owner-reported, not wire-verified
+        "dc_input_1_power": "DC XT60 Input 1",
+        "dc_input_2_power": "DC XT60 Input 2",
+    },
+}
+
+
 # -- Battery module sensors (created dynamically per slot) --------------------
 # Attr 101 carries the slot index; attrs 78/79/80/53/54 carry the per-slot
 # values. Entities are added the first time each slot number appears in
@@ -202,7 +226,12 @@ _CAR_PORT_POWER_NAMES: dict[str, str] = {
 
 
 def _slot_descriptions(slot: int) -> list[OUPESSensorDescription]:
-    """Return the six sensor descriptions for one ext-battery slot."""
+    """Return the five sensor descriptions for one ext-battery slot.
+
+    Five per slot is what the live entity registry confirms on a three-pack unit
+    (15 slot entities + 29 station entities = 44), which is also why the total entity
+    count moves when a pack is added or removed.
+    """
     display_name = f"External Battery {slot}"
     return [
         OUPESSensorDescription(
@@ -381,6 +410,9 @@ async def async_setup_entry(
     def _resolve(desc: OUPESSensorDescription) -> OUPESSensorDescription:
         if desc.key == "dc_12v_output" and series in _CAR_PORT_POWER_NAMES:
             return replace(desc, name=_CAR_PORT_POWER_NAMES[series])
+        rename = _PRODUCT_SENSOR_NAMES.get(coordinator.product_id, {})
+        if desc.key in rename:
+            return replace(desc, name=rename[desc.key])
         return desc
 
     # Add main device sensors immediately.
