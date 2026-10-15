@@ -22,6 +22,13 @@ STALE_TIMEOUT = timedelta(minutes=15)
 # How many seconds to hold the BLE connection collecting notifications per poll
 SCAN_DURATION = 15.0
 
+# Minimum seconds between live pushes to Home Assistant in continuous mode.
+# A burst of notifications is coalesced into one state-machine event per window;
+# the last notification of a burst is never dropped (trailing-edge throttle).
+# 2 s is comfortably below anything a human reads as "slow" and comfortably
+# above what a chatty notification stream would send straight at HA's bus.
+LIVE_PUSH_MIN_INTERVAL = 2.0
+
 # Max cold-probe retries per coordinator update cycle
 MAX_ATTEMPTS = 5
 

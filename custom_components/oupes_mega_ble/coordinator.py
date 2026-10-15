@@ -19,6 +19,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, Upda
 from .const import (
     ATTR78_RUNTIME_MAX,
     DOMAIN,
+    LIVE_PUSH_MIN_INTERVAL,
     MAX_ATTEMPTS,
     SCAN_DURATION,
     SERIES_SETTINGS,
@@ -393,6 +394,51 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         c_rolling_grid: list[int] = [0]
         c_pkt_buf: list[bytearray] = []
 
+        # Live push state. A received notification reaches Home Assistant within
+        # LIVE_PUSH_MIN_INTERVAL seconds of arrival, instead of waiting for the
+        # next keepalive tick (up to KEEPALIVE_INTERVAL). The cleanergy app
+        # repaints per notification; matching that feel is the whole point of
+        # this block, and the throttle is what keeps a burst of packets from
+        # becoming a burst of HA state-machine events.
+        c_last_push: list[float] = [0.0]
+        c_push_pending: list[bool] = [False]
+
+        def _push_snapshot() -> None:
+            """Publish the current attrs to HA. Event-loop thread only."""
+            if disconnected_event.is_set():
+                return
+            if not (attrs or any(ext_batteries.values())):
+                return
+            data: OUPESData = {
+                "attrs": dict(attrs),
+                "ext_batteries": {s: dict(sd) for s, sd in ext_batteries.items()},
+            }
+            self._live_data = data
+            self.last_successful_poll = datetime.now()
+            c_last_push[0] = _time.monotonic()
+            c_push_pending[0] = False
+            self.async_set_updated_data(data)
+
+        def _request_live_push() -> None:
+            """Trailing-edge throttle: push now, or schedule the rest of the window.
+
+            Scheduling the remainder (rather than dropping the request) is what
+            makes this trailing-edge: the last notification of a burst is always
+            published, so the value HA holds is never older than the throttle
+            window after the traffic stopped. May run off the event loop (BLE
+            callback thread), hence the threadsafe scheduling.
+            """
+            if c_push_pending[0]:
+                return
+            wait = LIVE_PUSH_MIN_INTERVAL - (_time.monotonic() - c_last_push[0])
+            if wait > 0:
+                c_push_pending[0] = True
+                self.hass.loop.call_soon_threadsafe(
+                    lambda: self.hass.async_call_later(wait, lambda _n: _push_snapshot())
+                )
+            else:
+                self.hass.loop.call_soon_threadsafe(_push_snapshot)
+
         def _apply_parsed(parsed: dict[int, int]) -> None:
             """Merge parsed attribute values into running data dicts."""
             nonlocal current_slot
@@ -422,6 +468,8 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             parsed = parse_packet_sequence(c_pkt_buf, packed_certain=self.packed_certain)
             if parsed:
                 _apply_parsed(parsed)
+                # Data landed: get it to HA now (throttled), not on the next tick.
+                _request_live_push()
                 if self._debug_attrs:
                     ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                     self._debug_log_packet(
@@ -534,16 +582,11 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             # Keepalive + data-push loop - runs until disconnected or cancelled
             await asyncio.sleep(KEEPALIVE_FIRST_DELAY)
             while not disconnected_event.is_set():
-                if attrs or any(ext_batteries.values()):
-                    data: OUPESData = {
-                        "attrs": dict(attrs),
-                        "ext_batteries": {
-                            s: dict(sd) for s, sd in ext_batteries.items()
-                        },
-                    }
-                    self._live_data = data
-                    self.last_successful_poll = datetime.now()
-                    self.async_set_updated_data(data)
+                # Heartbeat push. With notification-driven pushes in place this
+                # mostly finds the throttle closed and does nothing, which is
+                # correct: it remains the safety net that publishes even if the
+                # station ever answers a keepalive without notifying.
+                _push_snapshot()
 
                 try:
                     await client.write_gatt_char(
