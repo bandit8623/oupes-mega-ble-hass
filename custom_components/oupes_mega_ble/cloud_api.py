@@ -1,7 +1,8 @@
 """Cloud API client for OUPES device key and account identity retrieval.
 
 The OUPES cloud API at api.upspowerstation.top provides device metadata
-including the per-device ``device_key`` needed for BLE init packet 6, and the
+including the ``device_key`` needed for BLE init packet 6 - on Guardian / D5 V2
+stations that is ``md5(userId)[:10]``, shared by every station on the account - and the
 account identity (``openId`` + numeric id) that Guardian / D5 V2 stations embed
 in their AUTH frame.
 

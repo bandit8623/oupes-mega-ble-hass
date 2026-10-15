@@ -294,7 +294,9 @@ So the order of operations is fixed by the hardware, not by preference:
 11. When you want the app back - to change a setting, or to take an over-the-air
    firmware update, which only the app can do - **disable the entry, do not delete it**.
    Disabling releases the Bluetooth connection, keeps the entry and its entities, and
-   reconnects on its own when you switch it back on. Deleting throws the entry's
+   reconnects on its own when you switch it back on **provided the app has let go of the
+   radio** - the station serves one Bluetooth client, so force-close Cleanergy, or switch
+   the phone's Bluetooth off, before you re-enable. Deleting throws the entry's
    entities away, so every dashboard card and automation pointed at them goes dead and
    the whole setup has to be done again. Nothing about the station changes either way,
    so you can go back and forth between HA and the app as often as you like. The

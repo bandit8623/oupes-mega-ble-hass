@@ -25,9 +25,10 @@ SCAN_DURATION = 15.0
 # Max cold-probe retries per coordinator update cycle
 MAX_ATTEMPTS = 5
 
-# Config entry data key - the per-device 10-character hex init token.
+# Config entry data key - the 10-character hex init token.
 # Found at bytes 4-13 of BLE init packet 6 (from a btsnoop/PCAPdroid capture).
-# Per-device; obtained from the cloud API (auto) or a packet capture (manual).
+# On Guardian / D5 V2 stations this is md5(userId)[:10]: one key per account, shared by
+# every station that account paired, not one key per device.
 CONF_DEVICE_KEY = "device_key"
 
 # Config entry options - the cloud identity of the station's owner.  Only the

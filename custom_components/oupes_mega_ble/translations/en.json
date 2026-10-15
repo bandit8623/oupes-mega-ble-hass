@@ -17,7 +17,7 @@
           "cloud_password": "Cleanergy password — optional, used once, not saved"
         },
         "data_description": {
-          "device_key": "10-character hex key unique to your device (e.g. bd236b1695). You can override it here if needed.",
+          "device_key": "10-character hex init token. On a Guardian / D5 V2 it is md5(user ID)[:10] and is shared by every station on your account, so it is not unique to one device. Overriding it here without re-pairing the station breaks the link: the station checks the key it was actually paired with.",
           "continuous_connection": "Keep the Bluetooth connection open permanently instead of polling every 30 seconds. Captures infrequent sensor updates (e.g. battery voltage) but blocks the official app from connecting at the same time.",
           "poll_interval": "How often (in seconds) to connect and pull sensor data when not using continuous mode. Range: 10–600. Default: 30.",
           "stale_timeout": "How long (in minutes) to keep showing the last known values after a failed poll before marking entities as unavailable. Range: 1–120. Default: 15.",
@@ -98,13 +98,13 @@
       },
       "existing_key": {
         "title": "Enter Existing Device Key",
-        "description": "Enter the 10-character hex device key for **{name}** ({address}).\n\nYou can find this key by:\n- Running `adb logcat | findstr 8888888888888888888` while opening the Cleanergy app\n- Checking a btsnoop/PCAPdroid capture of the Cleanergy app traffic\n- Using the Cleanergy cloud API via the PowerShell script in the README",
+        "description": "Enter the device key for **{name}** ({address}): exactly 10 hex characters. This form checks the length and the character set before anything is sent to the station.\n\nOn a Guardian / D5 V2 station there is no key to hunt for. The Cleanergy app generates it as `md5(user ID)` truncated to 10 characters, so one command reproduces it:\n\n`python -c \"import hashlib;print(hashlib.md5(b'24680').hexdigest()[:10])\"`\n\nGoing back and choosing **Use my Cleanergy user ID** does that derivation for you, which is usually the easier route. Your user ID does not belong in this field: it is a short decimal number - five digits on the account measured here - and a decimal user ID is not 10 hex characters, so the form refuses it.\n\nUse this option when the key genuinely is something else: a value you captured from a Bluetooth log, or a station whose key is not that derivation, which has not been observed on this firmware family.",
         "data": {
           "device_key": "Device Key",
           "go_back": "← Go back and choose a different method"
         },
         "data_description": {
-          "device_key": "10-character hex key unique to your device (e.g. bd236b1695).",
+          "device_key": "Exactly 10 hex characters, for example 9256f177e0. On a Guardian / D5 V2 it is md5(user ID)[:10], so every station on your account shares the same key - it is not unique to one device.",
           "go_back": "Check this and click Submit to return to the method selection screen."
         }
       },

@@ -21,8 +21,10 @@ KEEPALIVE_INTERVAL     = 10.0  # seconds between subsequent keepalives
 
 # Initialization sequence
 # The 11 packets below are sent to WRITE_CHAR_UUID immediately after
-# subscribing to notifications.  Packet index 6 embeds a per-device token
-# ("bd236b1695") at bytes 4-13; replace this if connecting to a different unit.
+# subscribing to notifications.  Packet index 6 embeds the binding key
+# ("bd236b1695" in the captured sample) at bytes 4-13.  On Guardian / D5 V2 stations that
+# key is md5(userId)[:10], so it identifies the account, not the unit: every station the
+# account paired carries the same bytes.
 
 APP_INIT_SEQUENCE = [
     bytes.fromhex("0100019901010101010101010101010101010192"),

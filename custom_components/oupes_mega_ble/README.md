@@ -231,10 +231,18 @@ dependency. This replicates the Cleanergy app's pairing protocol.
 
 *On screen: "Enter an existing device key".*
 
-Enter a device key you already know — for example, from a previous setup, a
-btsnoop capture, or `adb logcat` output from the Cleanergy app.
+On a **Guardian / D5 V2 (`WP`)** station you should not need this screen at all. The key
+is `md5(user ID)[:10]`, which **Option A** derives from your user ID, so there is nothing
+to look up.
 
-The key must be exactly 10 lowercase hex characters (e.g., `bd236b1695`).
+The field takes **exactly 10 hex characters** and lower-cases what you type. Your user ID
+does not go in it: that is a short decimal number — five digits on the account measured
+here — and a decimal user ID is not 10 hex characters, so the form refuses it.
+
+What is left for this screen: older stations whose key came from the pairing procedure, or
+a key you recovered from your own capture. See
+[Finding an existing key](#finding-an-existing-key-without-cloud-login) — and read the
+warning at the top of it if your station is `WP`.
 
 #### Option C — Fetch from Cleanergy Cloud
 
@@ -452,7 +460,8 @@ only if you deliberately want to program a new key.
 | Entities always Unavailable | BLE disabled on unit | Press the IoT button on the device to re-enable it (indicator flashes rapidly when ready, solid when connected) |
 | "BLE device not found" in logs | HA hasn't scanned recently | Check Bluetooth integration is running |
 | Entities always Unavailable | App open on phone | The device only allows one BLE connection at a time — force-stop the Cleanergy app or switch the phone's Bluetooth off, then wait for the next poll. Swiping the app away is often not enough; it can keep the connection. If the IoT indicator is solid but HA isn’t polling, another device is holding the connection. |
-| Cleanergy app can no longer reach the station | Home Assistant is holding the single BLE connection — normal while the entry is enabled | If you want the app back (a setting change, an over-the-air firmware update), **disable** the entry rather than deleting it: disabling frees the radio and keeps the entities, deleting costs them and the whole setup. Re-enable to hand it back. |
+| Cleanergy app can no longer reach the station | Home Assistant is holding the single BLE connection — normal while the entry is enabled | If you want the app back (a setting change, an over-the-air firmware update), **disable** the entry rather than deleting it: disabling frees the radio and keeps the entities, deleting costs them and the whole setup. To hand it back, force-close the app first, then re-enable. |
+| Entities go *unavailable* right after you re-enable the entry | The station serves one BLE client, and the Cleanergy app is holding it | Force-close Cleanergy (or switch the phone's Bluetooth off), then reload or re-enable the entry. Do not re-pair and do not factory-reset the station for this. |
 | Settings entities blank/unknown | Device too far from BLE adapter | Cmd2 settings queries are request-response; if the signal is weak, responses get lost. Move the device closer or use an ESPHome BLE proxy |
 | Settings entities blank/unknown | Frequent connection gaps | Enable debug raw logging and check for gaps >2 min — indicates BLE range issues |
 | "Cold-probe drop" repeated | BLE interference or device busy | Usually self-resolves on next poll |
@@ -486,10 +495,18 @@ import hashlib
 device_key = hashlib.md5(str(user_uid).encode()).hexdigest()[:10]
 ```
 
-However, the device doesn't enforce this derivation — **any 10-character hex
-string works as a key.** The uid-based MD5 is purely a convention in the app.
-Keys are per-device: a key that works on one unit will not work on another
-unless it has been paired with that same key.
+However, the device doesn't enforce this derivation — the uid-based MD5 is a convention
+in the app. What the station actually checks is the key it was paired with, which is a
+10-character hex string; a wrong one fails the handshake. Two family-specific notes:
+
+- On **Guardian / D5 V2 (`WP`)** stations the paired key *is* `md5(userId)[:10]`, so
+  every station on your account shares one key. It is not unique to a device, and there
+  is no key to capture. Measured here: saving a wrong user ID re-derives the key, and the
+  station drops the link within seconds - so "any 10 hex characters" is true of the
+  *format* the form accepts, never of the value you can get away with sending.
+- On the older **`TT` (Mega)** stations the key is written during pairing, so two units on
+  the same account can carry different keys. That per-unit behaviour comes from the pairing
+  procedure; this fork has not measured that family.
 
 > **Note:** If the Cleanergy app runs before login completes, it falls back to
 > uid `"0"` (giving key `cfcd208495`). This can happen if the app is opened
@@ -497,14 +514,20 @@ unless it has been paired with that same key.
 
 ### Where the key comes from
 
-During the integration setup (Step 2 above), you choose one of three methods:
+During the integration setup (Step 2 above), the screen titled *How would you
+like to provide the device key?* offers four methods:
 
-- **Create New Key:** The integration pairs a new key over BLE. No prior
-  knowledge of the key is needed — just factory-reset the device first.
-- **Existing Key:** You supply a key you already know (from a btsnoop capture,
-  `adb logcat`, or a previous setup).
-- **Cloud Login:** The integration fetches the key from the OUPES cloud API
-  using your Cleanergy account.
+- **Use my Cleanergy user ID:** Give the numeric user ID (five digits on the account
+  measured here) and the integration derives `md5(user ID)[:10]` locally. One request is
+  never made, and nothing is sent anywhere. This is the option to pick on a `WP` station.
+- **Fetch key from Cleanergy cloud account:** Sign in with the email and password you use
+  in the app; the integration reads your user ID out of the vendor's own login response and
+  derives the key from it. The password is not stored. Pick this if you are unsure, or if
+  you do not know your user ID - it is the route that finds it for you.
+- **Enter an existing device key:** For a key that is not the derivation. See Option B.
+- **Create a new device key (requires factory reset):** Claims a blank station with a
+  generated identity. **Does not work on the `WP` family** - measured twice on a Guardian
+  6000 V2, once after a factory reset, both ending in a pairing timeout.
 
 ### Standalone pairing script
 
@@ -568,10 +591,17 @@ and WiFi remains unconfigured.
 
 ### Finding an existing key (without cloud login)
 
+> **`WP` (Guardian / D5 V2) readers: skip this section.** Your key is
+> `md5(user ID)[:10]` - one command, no phone, no capture. These recipes are also
+> misleading on that family: the vendor's own device list reports `device_key` as the
+> literal string `"WP"` for these stations, measured on a Guardian 6000 V2. It is a model
+> tag, not a binding key, so anyone who runs the listing below and reads `"WP"` will
+> conclude their key is two characters long. It is not.
+
 If the device is already paired and you need to recover the key:
 
-**ADB logcat (easiest, no root):** Connect your Android phone via USB with
-USB debugging enabled, then:
+**ADB logcat (reported for older stations; not reproduced in this fork):** Connect your
+Android phone via USB with USB debugging enabled, then:
 
 ```
 adb logcat | findstr "8888888888888888888"

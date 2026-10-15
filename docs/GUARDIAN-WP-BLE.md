@@ -150,9 +150,19 @@ The other options on that screen, honestly described:
   It logs in with your email and password, reads your user ID out of the login
   response and derives the key. It needs the station to be in that account's
   device list. Your password is used once and is never written to disk.
-* **Enter an existing device key** — for the case where the key is not the
-  derivation, which has not been observed on this family. Also where you enter a
-  key you captured yourself.
+* **Enter an existing device key** — the field takes **10 hex characters**, and that is
+  checked before anything reaches the station. On this family the value is
+  `md5(user ID)[:10]`, so the command in §4 produces it:
+
+  ```
+  python -c "import hashlib;print(hashlib.md5(b'24680').hexdigest()[:10])"   -> 9256f177e0
+  ```
+
+  **Your user ID does not go in this field.** It is a short decimal number - five digits
+  on the account measured here - and a decimal user ID is not 10 hex characters, so the
+  form rejects it. Put it in **Use my Cleanergy user ID**, which derives the key itself.
+  This option is for the rarer cases: a key you captured from a Bluetooth log, or a
+  station whose key is not the derivation, which has not been observed on this family.
 * **Create a new device key (requires factory reset)** — claims a blank station
   with a generated identity. **This does not work on this firmware family.**
   Measured twice on a Guardian 6000 V2, once on 2026-10-14 and once after a
@@ -188,11 +198,32 @@ recovers on its own after a reload. Re-adding to a **different** account changes
 it, and the old entry is then simply wrong.
 
 If you want the app back for a while: **disable the HA entry first** (Settings,
-Devices & Services, the integration's three-dot menu, Disable). That releases the
-radio and keeps every stored value. Disabling and removing are not the same thing,
-and neither one writes to the station: nothing in Home Assistant's own UI can, so
-you can disable, re-enable, even delete and re-add an entry without changing what
+Devices & Services, the ⋮ menu on the OUPES entry, Disable). That releases the
+radio and keeps every stored value.
+
+Disabling and removing are **not** the same thing, and the difference is not what they
+do to the station. Neither one writes to it - nothing in Home Assistant's own UI can -
+so you can disable, re-enable, even delete and re-add an entry without changing what
 the station holds. Only pairing writes.
+
+The difference is what they do to Home Assistant:
+
+| Action | Station's stored pair | The entry | Its entities | Your dashboards and automations |
+|---|---|---|---|---|
+| **Disable** | untouched | kept | kept, marked *unavailable* | go quiet, come straight back on re-enable |
+| **Re-enable** | untouched | reconnects with stored credentials | back on their own | back |
+| **Remove (delete)** | untouched | **gone** | removed with it, **or left behind** to clean up by hand | dead until you redo the whole pairing screen |
+
+One rule when handing the radio back: the station serves **one** Bluetooth client, so
+force-close the app - or switch the phone's Bluetooth off - **before** re-enabling. If the
+entities come back *unavailable*, the app is almost certainly still holding the link.
+
+So a removed entry really can be rebuilt - the key is `md5(user ID)[:10]`, so nothing is
+lost that you cannot retype - but you are throwing away the entry and its entities to
+release a radio that disabling releases for free, and the cleanup is not even guaranteed
+tidy: on the machine writing this guide, entity entries outlived the config entry they
+belonged to and had to be deleted separately. Remove only when you actually want the
+entry gone, such as replacing a broken setup.
 
 ### Measured, not inferred
 
@@ -212,13 +243,28 @@ proxies, on 2026-10-14:
 
 Over the air updates are the vendor app's job, so this day may come. The sequence:
 
-1. **Disable** the HA entry. Do not remove it, and do not remove the station in the
+1. **Disable** the HA entry (Settings, Devices & Services, the ⋮ menu on the OUPES
+   entry, Disable). Do not remove it, and do not remove the station in the
    app. Disabling frees the radio while keeping the entry and its entities, so the
    dashboards and automations built on those entities are merely unavailable and come
    back on re-enable. Removing the entry deletes them, and the setup has to be done
    again from the pairing screen.
 2. Wake the station, connect the app, update, and let the station reboot.
-3. **Re-enable** the HA entry. It reconnects with the credentials it already has.
+3. **Force-close the Cleanergy app** before you touch Home Assistant again. Kill it, do
+   not just background it or leave it sitting on the update screen. Switching the phone's
+   Bluetooth off works too, and works even when the app is wedged.
+
+   The station serves **one** Bluetooth client at a time. Measured above: while HA held
+   the link the app could not reach the station at all. The limit is symmetric, so the
+   reverse holds too - if the app still has the link, Home Assistant cannot get it, the
+   entities sit *unavailable*, and it looks like the update broke the integration.
+4. **Re-enable** the HA entry. It reconnects with the credentials it already has. If it
+   comes up *unavailable*, the app still owns the radio: close it and reload the entry.
+   Nobody has measured what an update does to the station's stored pair, so if the link
+   still will not come back with the app definitely closed, work through
+   [Troubleshooting](#6-troubleshooting) rather than guessing - and do not "fix" it by
+   removing the station in the app, which is the one step here that really can cost you
+   the pairing.
 
 If the update rotates the key, the symptom after step 3 is HA connecting and then
 getting no telemetry. Fix it by re-adding the station to the same account in the app
