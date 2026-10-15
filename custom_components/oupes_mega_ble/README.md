@@ -71,7 +71,7 @@ Tested on a single Guardian 6000 V2 with two expansion battery packs.
 
 #### Which pairing method to choose
 
-**Use my Cleanergy account number** is the one to pick on a `WP` station. The binding
+**Use my Cleanergy user ID** is the one to pick on a `WP` station. The binding
 key is `md5(user ID)` truncated to ten characters, which is how the official
 app generates it, so the number is the whole credential and nothing has to be
 captured, looked up or pasted.
@@ -108,7 +108,7 @@ order:
 3. Add the station: accept the Bluetooth discovery card (or add it manually). On the
    pairing-method screen choose **Fetch key from Cleanergy cloud account** and sign in
    with the email you use in the app - that reads your user ID and derives the key,
-   and the password is not stored. Or choose **Use my Cleanergy account number** and
+   and the password is not stored. Or choose **Use my Cleanergy user ID** and
    type the user ID directly. Then fill in **Connection settings**. Neither path writes
    anything to the station; it authenticates with the pair the app left behind.
 4. Telemetry normally appears within about twenty seconds of the entry loading.
@@ -117,7 +117,7 @@ The options dialog still carries **Cloud userId** and **Cloud openId** fields fo
 stations configured before this flow existed. `userId` there overrides whatever the
 entry was built with, and `openId` is not read by the station at all - it is kept in
 the frame because older firmware expects the field to exist. Neither needs filling in
-on a station set up through the account-number screen.
+on a station set up through the user ID screen.
 
 `userId` is stored as a number, so a zero-prefixed value will not match what the
 station holds, and both fields must come from the account the station is bound to.
@@ -191,7 +191,7 @@ After discovery, the integration asks you to choose how to provide the
 **device key** — a 10-character hex string the device uses to authenticate BLE
 sessions. The screen offers four options, listed in this order:
 
-1. **Use my Cleanergy account number** — see
+1. **Use my Cleanergy user ID** — see
    [Which pairing method to choose](#which-pairing-method-to-choose) above. This
    is the one for Guardian / D5 V2 (`WP`) stations.
 2. **Fetch key from Cleanergy cloud account** — detailed in Option C below.
@@ -444,7 +444,8 @@ only if you deliberately want to program a new key.
 | Entities always Unavailable | Device out of range or off | Check device is on and in range |
 | Entities always Unavailable | BLE disabled on unit | Press the IoT button on the device to re-enable it (indicator flashes rapidly when ready, solid when connected) |
 | "BLE device not found" in logs | HA hasn't scanned recently | Check Bluetooth integration is running |
-| Entities always Unavailable | App open on phone | The device only allows one BLE connection at a time — close the Cleanergy app and wait for the next poll. If the IoT indicator is solid but HA isn’t polling, another device is holding the connection. |
+| Entities always Unavailable | App open on phone | The device only allows one BLE connection at a time — force-stop the Cleanergy app or switch the phone's Bluetooth off, then wait for the next poll. Swiping the app away is often not enough; it can keep the connection. If the IoT indicator is solid but HA isn’t polling, another device is holding the connection. |
+| Cleanergy app can no longer reach the station | Home Assistant is holding the single BLE connection — normal while the entry is enabled | If you want the app back (a setting change, an over-the-air firmware update), **disable** the entry rather than deleting it: disabling frees the radio and keeps the entities, deleting costs them and the whole setup. Re-enable to hand it back. |
 | Settings entities blank/unknown | Device too far from BLE adapter | Cmd2 settings queries are request-response; if the signal is weak, responses get lost. Move the device closer or use an ESPHome BLE proxy |
 | Settings entities blank/unknown | Frequent connection gaps | Enable debug raw logging and check for gaps >2 min — indicates BLE range issues |
 | "Cold-probe drop" repeated | BLE interference or device busy | Usually self-resolves on next poll |

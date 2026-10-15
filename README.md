@@ -59,7 +59,7 @@ v1.3.0 is theirs; the differences below are ours.
 - **Never remove the station from the vendor app.** Removing it wipes the stored pair.
   To hand the radio to the app, disable the HA entry instead - that was measured
   end-to-end, including the return.
-- New pairing method **Use my Cleanergy account number**; cloud login derives the key.
+- New pairing method **Use my Cleanergy user ID**; cloud login derives the key.
 - A `WP` station that answers and hangs up now logs the reason instead of a `DEBUG` line
   nobody reads.
 - Docs corrected where they were actively misleading, and a section added on which
@@ -115,7 +115,7 @@ device over BLE and exposes sensors, switches, and settings entities.
 5. Restart Home Assistant — required, HACS only swaps the files on disk.
 6. Add the station: accept the Bluetooth discovery card (or add it manually), then
    follow **Choose pairing method** and **Connection settings**. On a Guardian /
-   D5 V2 pick **Use my Cleanergy account number** and enter the user ID the
+   D5 V2 pick **Use my Cleanergy user ID** and enter the user ID the
    app paired the station with - the integration derives the binding key from it,
    so there is no key to capture and no openid to hunt for.
 7. Check the entities. Telemetry normally appears within ~20 s. If it does not,
@@ -182,9 +182,10 @@ intended outcome, not a rivalry.
 >    from Cleanergy cloud account** and sign in with that email address. It is a
 >    one-time request and the password is not stored.
 > 3. **Never remove the station from the app afterwards.** Re-pairing is only
->    possible from the app, and a factory reset means starting over there. Deleting
->    the Home Assistant entry is safe and reversible; removing the station from the
->    app is not.
+>    possible from the app, and a factory reset means starting over there. Deleting the
+>    Home Assistant entry can be undone, but it is the wrong tool: it takes the entry's
+>    entities with it, so **Disable** is how you hand the station to the app. Removing
+>    the station from the app is the one action you cannot take back from here.
 > 4. **Turn the phone's Bluetooth off, or force-stop the Cleanergy app, before Home
 >    Assistant connects.** The station answers one Bluetooth client at a time, so a
 >    phone that still holds it does not merely slow Home Assistant down - it blocks
@@ -250,9 +251,12 @@ So the order of operations is fixed by the hardware, not by preference:
 4. **Use the same account in Home Assistant that the app paired with.** You will not
    find that number in the app - it does not display it anywhere, so do not spend the
    evening hunting for the screen. You normally do not need to know it at all, because
-   the cloud login in step 6 reads it for you. If you do want it: an existing entry
-   shows it (**cog on the OUPES card → Configure**, the `Cloud userId` field), and a
-   vendor login request returns it as `info.uid` - see
+   the cloud login in step 7 reads it for you. If you do want it: an existing entry
+   shows it (**cog on the OUPES card → Configure**, the `Cloud userId` field) - but
+   only if that entry was set up through the email login, because that is the request
+   that fetches the number. An entry built by typing a device key by hand shows `0`
+   there, since nothing ever told Home Assistant the value. From scratch, a vendor
+   login request returns it as `info.uid` - see
    [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).
 5. **Switch the phone's Bluetooth off** — or force-close the app. One Bluetooth
    client at a time, and an app still holding the station produces a pairing
@@ -272,7 +276,7 @@ So the order of operations is fixed by the hardware, not by preference:
      you use in the app. Home Assistant reads your user ID out of the vendor's own
      login response and derives the key from it. One request, and the password is not
      stored. Take this one if you are unsure.
-   - **Use my Cleanergy account number** — type the user ID and the key is derived
+   - **Use my Cleanergy user ID** — type the user ID and the key is derived
      locally. No sign-in, no network request.
 
    On a recognised Guardian the second option is already selected for you. Do not pick
@@ -286,8 +290,16 @@ So the order of operations is fixed by the hardware, not by preference:
 10. Understand what that costs: **Home Assistant now holds the station's single
    Bluetooth connection**, so Cleanergy stops reporting it while the entry is loaded.
    Its cloud figures keep updating, but live control from the app does not work. That
-   is the arrangement, not a malfunction. Disable the entry to hand the radio back to
-   the app.
+   is the arrangement, not a malfunction.
+11. When you want the app back - to change a setting, or to take an over-the-air
+   firmware update, which only the app can do - **disable the entry, do not delete it**.
+   Disabling releases the Bluetooth connection, keeps the entry and its entities, and
+   reconnects on its own when you switch it back on. Deleting throws the entry's
+   entities away, so every dashboard card and automation pointed at them goes dead and
+   the whole setup has to be done again. Nothing about the station changes either way,
+   so you can go back and forth between HA and the app as often as you like. The
+   sequence is written up in
+   [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md#when-a-firmware-update-needs-the-app).
 
 **Do not use "Create a new device key" on a station that is already paired.** That
 path claims the station and overwrites what it holds, and on this firmware family it
@@ -295,7 +307,7 @@ does not complete at all - measured twice, once immediately after a factory rese
 Claiming works on the older `TT` stations, and on a `WP` unit only if the vendor has
 never bound it.
 
-Would rather not hand this integration your password? The account-number path needs
+Would rather not hand this integration your password? The user ID path needs
 none. It is one number, and the key follows from it.
 
 If the station is brand new and you would rather never install the app: you cannot.
@@ -356,7 +368,7 @@ based on the BLE product ID.
 
 > **Guardian / D5 V2 stations** (e.g. the Guardian 6000 V2) advertise the BLE name
 > **`WP`** rather than `TT`, and they authenticate against the Cleanergy account the
-> station was paired with. You give the integration that **account number** and it
+> station was paired with. You give the integration that **user ID** and it
 > derives the key - see
 > [Guardian / D5 V2 stations](custom_components/oupes_mega_ble/README.md#guardian--d5-v2-stations-ble-name-wp).
 > Add the station in the vendor app first, and never remove it afterwards.

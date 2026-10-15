@@ -80,7 +80,7 @@ KEY_METHOD_CREATE = "create_new_key"
 KEY_METHOD_EXISTING = "existing_key"
 KEY_METHOD_CLOUD = "cloud_login"
 KEY_METHOD_LOCAL = "local_claim"
-# Ask for the account number alone. The binding key is md5(account)[:10], so the
+# Ask for the user ID alone. The binding key is md5(account)[:10], so the
 # number is the whole credential on the WP family, which is why this needs no
 # cloud call, no capture and no WeChat openid.
 KEY_METHOD_ACCOUNT = "account_number"
@@ -128,7 +128,7 @@ def _identity_source_phrase(source: str) -> str:
         return "typed in by hand"
     if source == IDENTITY_SOURCE_DERIVED:
         return (
-            "derived here from your Cleanergy account number, the same way the "
+            "derived here from your Cleanergy user ID, the same way the "
             "vendor app derives it, so there is nothing to keep in sync"
         )
     # Entries written before provenance was recorded: say nothing specific rather
@@ -138,12 +138,12 @@ def _identity_source_phrase(source: str) -> str:
 
 
 def _parse_account_number(raw: Any) -> int:
-    """Read an account number out of a form field.
+    """Read an user ID out of a form field.
 
     The UI control for this is a NumberSelector, which delivers a **float** over
     the websocket and a string over the REST flow API, so ``24680`` can arrive as
     ``24680``, ``24680.0`` or ``"24680"``. ``int("24680.0")`` raises, which used to
-    reject a perfectly valid account number on the first try. Empty, negative,
+    reject a perfectly valid user ID on the first try. Empty, negative,
     fractional and non-numeric input all come back as 0, meaning "not given".
     """
     if raw is None:
@@ -173,14 +173,14 @@ def resolve_key_on_account_change(
     """Which device key to persist when the options form is submitted.
 
     The rule that matters: a key the integration **derived** is a function of the
-    account number, so if the account number changes and the key box is left alone,
+    user ID, so if the user ID changes and the key box is left alone,
     carrying the old key over would make the station refuse the frame - it compares
-    against the stored ``(account number, key)`` pair the vendor app wrote, so a new
-    account number paired with a stale key reads as "re-pairing failed" when all that
+    against the stored ``(user ID, key)`` pair the vendor app wrote, so a new
+    user ID paired with a stale key reads as "re-pairing failed" when all that
     happened is a field nobody looked at kept its old value.
 
     A key the user **typed** is not a function of anything, so it always wins, and a
-    stored key that is not ``md5(previous account number)`` is treated as captured or
+    stored key that is not ``md5(previous user ID)`` is treated as captured or
     hand-entered and is left alone rather than silently overwritten.
 
     Returns the key to store; an empty result means "nothing to store".
@@ -194,7 +194,7 @@ def resolve_key_on_account_change(
     previous_uid = int(previous_uid or 0)
 
     if not new_uid or new_uid == previous_uid:
-        # Account number unchanged, or none supplied: nothing here implies the key moved.
+        # User ID unchanged, or none supplied: nothing here implies the key moved.
         return stored
 
     if not previous_uid:
@@ -446,11 +446,11 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         # All four are offered whatever the station is, because a hand-typed address
         # carries no advertisement and therefore no family. Manual entry is the path
         # for a station that no proxy could see, which is usually the newer family,
-        # so hiding the account-number option here would hide it from exactly the
+        # so hiding the user ID option here would hide it from exactly the
         # people who need it. The default still splits: an unrecognised station leads
         # with the legacy claim, a known Guardian with the derivation.
         methods = {
-            KEY_METHOD_ACCOUNT: "Use my Cleanergy account number",
+            KEY_METHOD_ACCOUNT: "Use my Cleanergy user ID",
             KEY_METHOD_CLOUD: "Fetch key from Cleanergy cloud account",
             KEY_METHOD_EXISTING: "Enter an existing device key",
             KEY_METHOD_CREATE: "Create a new device key (requires factory reset)",
@@ -659,15 +659,15 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Pairing succeeded - proceed to connection settings."""
         return await self.async_step_connection_settings()
 
-    # -- Method A2: Account number, key derived from it ---------------------
+    # -- Method A2: User ID, key derived from it ---------------------
 
     async def async_step_account_number(
         self, user_input: dict[str, Any] | None = None
     ) -> FlowResult:
-        """Pair with nothing but the Cleanergy account number.
+        """Pair with nothing but the Cleanergy user ID.
 
         The binding key the vendor app writes is ``md5(account)[:10]``, so the
-        account number is the whole credential on this family and no capture,
+        user ID is the whole credential on this family and no capture,
         cloud read or openid is involved. Measured on a Guardian 6000 V2: this
         key with this userId is accepted and streams telemetry with the openId
         field zero-filled, while a foreign userId is refused - the station
@@ -796,7 +796,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     # accounts, never a key. That used to mean falling back to a
                     # BLE claim, which the station refuses. It does not need one:
                     # the app writes md5(account)[:10] as the binding key, so the
-                    # account number the login just returned derives it, and the
+                    # user ID the login just returned derives it, and the
                     # station is already paired because the owner added it in the
                     # app. Nothing is written to the station on this path.
                     self._pairing_key = derive_device_key(int(identity.user_id))
@@ -804,7 +804,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     _LOGGER.info(
                         "OUPES cloud carries no device_key for this station (the "
                         "record holds the family tag), so the binding key was "
-                        "derived from the account number instead"
+                        "derived from the user ID instead"
                     )
                     return await self.async_step_connection_settings()
 
@@ -838,7 +838,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     # -- Connection settings (final step before entry creation) ----------
 
     def _needs_identity(self) -> bool:
-        """Whether this station still needs an account number before continuing.
+        """Whether this station still needs an user ID before continuing.
 
         Guardian / D5 V2 stations put the account identity inside their AUTH
         frame, so without it the station answers and then drops Bluetooth a few

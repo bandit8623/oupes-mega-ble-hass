@@ -50,7 +50,7 @@ IDENTITY_SOURCE_LOCAL = "local"
 IDENTITY_SOURCE_CLOUD = "cloud"
 IDENTITY_SOURCE_MANUAL = "manual"
 IDENTITY_SOURCE_DERIVED = "derived"
-# The binding key was computed as md5(userId)[:10] from an account number rather
+# The binding key was computed as md5(userId)[:10] from an user ID rather
 # than read from anywhere: see protocol.derive_device_key and
 # docs/GUARDIAN-WP-BLE.md. Recorded so a later reader can tell a derived key from
 # one that came off the vendor's servers.

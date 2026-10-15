@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Before you file: on a Guardian / D5 V2 (`WP`) station the usual cause is that
-        the **account number does not match the account the station is paired with**, or
+        the **user ID does not match the account the station is paired with**, or
         the station was removed from the vendor app after pairing. Check
         *Settings → Devices & Services → OUPES → Configure*. If Home Assistant logs
         "connected and the station dropped the link immediately", that is the identity
@@ -16,9 +16,9 @@ body:
     attributes:
       value: |
         ## Do not post secrets
-        Please redact your **device key**, **openId**, **account number (userId)**,
+        Please redact your **device key**, **openId**, **user ID (userId)**,
         Home Assistant access tokens, and any CSV produced by `debug_raw_logging` —
-        that file contains the AUTH frame, which carries your account number. MAC
+        that file contains the AUTH frame, which carries your user ID. MAC
         addresses are fine to post if you need to, but they are not required here.
 
   - type: dropdown
@@ -76,12 +76,12 @@ body:
   - type: dropdown
     id: identity
     attributes:
-      label: On a WP station — is the account number set, and does it own the station?
+      label: On a WP station — is the user ID set, and does it own the station?
       description: >
         The openId is not required; the station was measured to ignore it. What it checks
-        is the account number and the key derived from it.
+        is the user ID and the key derived from it.
       options:
-        - "Yes, account number is set and belongs to the account that paired the station"
+        - "Yes, user ID is set and belongs to the account that paired the station"
         - "No / not sure"
         - "Not applicable (TT station)"
     validations:

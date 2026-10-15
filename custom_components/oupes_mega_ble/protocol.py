@@ -267,9 +267,9 @@ def derive_device_key(user_id: int) -> str:
     both are known from a password login, which is why the cloud path works
     without a WeChat openid.
 
-    Note what this is not: it is a hash of an account number, not a per-station
+    Note what this is not: it is a hash of an user ID, not a per-station
     secret. Every station an account pairs receives the same key, and anyone who
-    knows the account number can compute it. See docs/GUARDIAN-WP-BLE.md.
+    knows the user ID can compute it. See docs/GUARDIAN-WP-BLE.md.
     """
     return hashlib.md5(str(int(user_id)).encode("ascii")).hexdigest()[:10]
 

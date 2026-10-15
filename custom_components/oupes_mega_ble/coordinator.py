@@ -117,7 +117,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             _LOGGER.warning(
                 "%s (%s) is a Guardian / D5 V2 ('WP') station: it authenticates "
                 "against the account it was paired with in the Cleanergy app. Set the "
-                "account number during setup (or in the integration options), "
+                "user ID during setup (or in the integration options), "
                 "otherwise the station will answer and then drop the link after a "
                 "few seconds",
                 name,
@@ -306,7 +306,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             if self.product_series == "guardian" and attempt == MAX_ATTEMPTS - 1:
                 # A WP station that answers and then hangs up within a few seconds is
                 # the signature of an identity the station does not recognise. Only the
-                # account number and its derived key are checked; the openId is not,
+                # user ID and its derived key are checked; the openId is not,
                 # so this deliberately does not send people looking for one. Everything
                 # about this verdict comes from a single unit on firmware 1.2.0 - see
                 # docs/GUARDIAN-WP-BLE.md section 12 - so it names what to look at
@@ -314,7 +314,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning(
                     "%s: connected %d times and each time the station dropped the link "
                     "immediately. On a Guardian / D5 V2 this is what a rejected account "
-                    "identity looks like. The stored account number is %s and the key is "
+                    "identity looks like. The stored user ID is %s and the key is "
                     "derived from it; check they belong to the account the station was "
                     "added with in the Cleanergy app, and that the station has not been "
                     "removed from that app since pairing",

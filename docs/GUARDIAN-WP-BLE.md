@@ -56,9 +56,12 @@ device page, nothing that shows it - so do not spend an evening hunting for one.
 ways that do work:
 
 * **From an entry you already have working.** The cog on the OUPES card →
-  **Configure**, and read the **Cloud userId** field. It comes pre-filled with the
-  value in use, so a station that is already paired tells you its own number.
-* **From the vendor API**, which is the same call the app itself makes:
+  **Configure**, and read the **Cloud userId** field, which comes pre-filled. It only
+  holds a real number if that entry went through the **Fetch key from Cleanergy cloud
+  account** login at some point - that request is what looks the value up. An entry
+  built by typing a device key directly never supplied one, and shows `0`.
+* **From the vendor API**, which is the same call the app itself makes, and which the
+  integration runs for you when you pick the cloud login above:
 
 ```
 POST http://api.upspowerstation.top/api/app/user/login
@@ -77,7 +80,7 @@ otherwise cost you an hour:
   you do not trust, and do not paste a response into a public issue.
 
 You normally never need to make this call. Home Assistant's **Use my Cleanergy
-account number** option asks for the number directly, and **Fetch key from Cleanergy
+user ID** option asks for the number directly, and **Fetch key from Cleanergy
 cloud account** (§5) logs in and reads it for you.
 
 ### Why there used to be a second value here
@@ -136,7 +139,7 @@ Integration → OUPES Mega BLE** and type the address into **Bluetooth MAC Addre
 when a nearby adapter did see the station, that field arrives pre-filled.
 
 Either route lands on **How would you like to provide the device key?**. Pick **Use my
-Cleanergy account number** and enter the user ID from §3, or pick **Fetch key from
+Cleanergy user ID** and enter the user ID from §3, or pick **Fetch key from
 Cleanergy cloud account** and sign in, which looks the number up for you. Either way
 the key is derived from the number, and nothing is written to the station: the app
 already left the matching pair there.
@@ -210,7 +213,10 @@ proxies, on 2026-10-14:
 Over the air updates are the vendor app's job, so this day may come. The sequence:
 
 1. **Disable** the HA entry. Do not remove it, and do not remove the station in the
-   app.
+   app. Disabling frees the radio while keeping the entry and its entities, so the
+   dashboards and automations built on those entities are merely unavailable and come
+   back on re-enable. Removing the entry deletes them, and the setup has to be done
+   again from the pairing screen.
 2. Wake the station, connect the app, update, and let the station reboot.
 3. **Re-enable** the HA entry. It reconnects with the credentials it already has.
 

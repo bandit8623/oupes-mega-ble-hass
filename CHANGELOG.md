@@ -8,6 +8,51 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.4 - 2026-10-15
+
+Text and defaults only. No stored key, step id, or config key changes, so existing
+entries are untouched and nothing on a running station is affected.
+
+- The pairing control that asked for an "account number" now calls it what it is: the
+  **Cleanergy user ID**. Renamed in the pairing-method option, the screen title, the
+  field label, and the surrounding help text, plus the log lines and issue templates
+  that used the old phrase. There is no such thing as an account number in this system,
+  and readers went looking for one in an app that never showed it.
+- That field's help text now says where the number actually comes from, instead of
+  leaving people hunting through the app for a screen that does not exist.
+- Four error messages across the config and options flows told people the Cleanergy app
+  shows the value "on the device's settings screen" or "in the account screen". Neither
+  screen exists on the app as shipped, so the advice could not be followed by anyone. The
+  affected strings are `cloud_identity_no_open_id` and `invalid_user_id` in both flows.
+  They now name the two routes that were checked on a real install: the `Cloud userId`
+  field under the entry's Configure dialog, and the vendor login response field `uid`.
+- Quick Start: setup steps expanded to cover waking the station before the first connect,
+  the cloud-login route to the user ID, what a successful setup looks like (about fifteen
+  seconds, roughly 44 entities, DC inputs reading unknown while nothing is plugged in),
+  and why entities can come up *unavailable*. The before-you-start box now includes
+  turning the phone's Bluetooth off, since the first reconnect after the phone let go took
+  18 seconds against 12 - not a malfunction, but a real effect worth knowing about.
+- Documentation claimed a pairing route called "Specify manually" leading to an "Other /
+  already-paired device" choice. Neither string exists in the integration. Replaced with
+  the two real routes, checked against `config_flow.py`: add from the discovered device
+  card, or type the Bluetooth MAC address into the manual dialog. Every control named in
+  the docs is now one that ships.
+- Front page: a new step telling you to **disable** the entry rather than delete it when
+  you want the app back for a setting change or an over-the-air firmware update.
+  Disabling releases Bluetooth and keeps the entities, so dashboards and automations
+  survive the round trip; deleting costs them.
+- Documented that `Cloud userId` only holds a value when the entry came through the
+  email-login path. An entry made by typing a device key shows `0` there, which is not a
+  fault.
+- The terminology guard no longer exempts any shipped label. It previously allowed the
+  two controls that carried the old phrase inside bold quotes; that exemption list is now
+  empty and the phrase is banned across docs, shipped strings, `config_flow.py` and the
+  issue templates. The test also asserts the renamed labels still exist, so the ban cannot
+  be satisfied by quietly deleting the control that needed renaming. Both it and
+  `tests/test_no_phantom_screen_claims.py` are shown failing on planted violations, and the
+  phantom-screen test was verified against the exact string that shipped in 1.4.3.
+
+
 ## 1.4.3 - 2026-10-14
 
 ### The error strings were filed where Home Assistant never looks

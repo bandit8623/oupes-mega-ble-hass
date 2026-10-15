@@ -6,12 +6,12 @@ body:
     attributes:
       value: |
         Setup on the Guardian / D5 V2 family derives the Bluetooth binding key as
-        `md5(account number)` truncated to ten characters. That rule came from **one
+        `md5(user ID)` truncated to ten characters. That rule came from **one
         Guardian 6000 V2 on firmware 1.2.0** - see
         [the guide, section 12](../../blob/release/docs/GUARDIAN-WP-BLE.md#12-how-much-of-this-is-actually-known).
 
         A report here is one cell in a table nobody else can fill in. "It worked first
-        time" is as useful as "it refused". Please do not post your account number,
+        time" is as useful as "it refused". Please do not post your user ID,
         device key or openId.
 
   - type: input
@@ -50,7 +50,7 @@ body:
     attributes:
       label: Which setup method did you use?
       options:
-        - Use my Cleanergy account number
+        - Use my Cleanergy user ID
         - Fetch key from Cleanergy cloud account
         - Enter an existing device key
         - Create a new device key

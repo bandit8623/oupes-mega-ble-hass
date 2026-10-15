@@ -1,23 +1,19 @@
-"""The user-facing name for the pairing value is "user ID", not "account number".
+"""The user-facing name for the pairing value is "user ID", full stop.
 
 Rationale: these are account *names* (email addresses) and numeric *user IDs*. There is
 no such thing as an account number, and shipping that phrase invents a concept readers
-then look for in the Cleanergy app without finding it.
+then look for in the Cleanergy app without finding it - which they cannot, because the
+app does not display the value at all.
 
-Two shipped selector labels still contain the phrase, because renaming them changes the
-UI and belongs in a release with its own tests:
-
-    "Use my Cleanergy account number"   (config flow, pairing-method selector)
-    "Account number"                    (options flow field label)
-
-Until that release, those exact strings may appear in documentation, but only inside a
-Markdown bold span - i.e. only where the text is quoting the control a reader will see.
-Everywhere else the phrase is banned, in code comments as well as prose.
-
-When 1.4.4 renames the controls, tighten this test: delete ALLOWED_LABELS and let the
-phrase be banned outright.
+The phrase is banned outright: documentation, shipped UI strings, and the selector label
+built in config_flow.py. It used to be exempted inside **bold** quotes of the two control
+labels that carried it ("Use my Cleanergy account number", "Account number"); those
+labels were renamed rather than excused, and test_the_renamed_controls_exist below
+asserts the new labels are really present, so the ban cannot be satisfied by quietly
+dropping the control that needed renaming.
 """
 
+import json
 import pathlib
 import re
 import sys
@@ -26,26 +22,28 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 BANNED = re.compile(r"account\s+number", re.IGNORECASE)
 
-# Verbatim control labels as shipped in 1.4.3 (config_flow.py methods dict, strings.json).
-# Keep in sync with strings.json; test_labels_still_match_code below fails if they drift.
-ALLOWED_LABELS = (
-    "Use my Cleanergy account number",
-    "Account number",
-)
+# Nothing is exempt. Emptying this list is what makes the rename in config_flow.py and
+# strings.json mandatory instead of advisory; a non-empty entry would be a standing
+# exception for text that has already been renamed once.
+ALLOWED_LABELS: tuple[str, ...] = ()
 
-# Only these label strings are permitted, and only when bolded.
 BOLD = re.compile(r"\*\*([^*]+)\*\*")
 
+# CHANGELOG.md is deliberately NOT scanned: release notes are a historical record, and
+# rewriting an old entry to say "user ID" would misreport what that release shipped.
+#
+# Shipped UI text and the issue template are held to the same rule as the README: prose
+# without ** markers, so any occurrence in them fails outright.
 DOCS = [
     "README.md",
     "custom_components/oupes_mega_ble/README.md",
     "docs/GUARDIAN-WP-BLE.md",
+    "custom_components/oupes_mega_ble/strings.json",
+    "custom_components/oupes_mega_ble/translations/en.json",
+    "custom_components/oupes_mega_ble/config_flow.py",
+    ".github/ISSUE_TEMPLATE/10-will-not-connect.yml",
+    ".github/ISSUE_TEMPLATE/05-compatibility-report.yml",
 ]
-
-
-def _quoted_spans(line: str):
-    """Character ranges covered by **bold** spans, i.e. verbatim UI quotes."""
-    return [(m.start(), m.end()) for m in BOLD.finditer(line)]
 
 
 def _bold_spans(text: str):
@@ -149,7 +147,7 @@ def test_guard_does_not_cry_wolf():
     clean = (
         src
         + "\n\nAn intentionally unbalanced bold ** marker here.\n\n"
-        + "Pick **Fetch key from Cleanergy cloud account** or\n**Use my Cleanergy\naccount number**, which are controls.\n"
+        + "Pick **Fetch key from Cleanergy cloud account** or\n**Use my Cleanergy\nuser ID**, which are controls.\n"
     )
     try:
         doc.write_text(clean, encoding="utf-8", newline="\n")
@@ -158,6 +156,30 @@ def test_guard_does_not_cry_wolf():
         raise AssertionError(f"guard reported clean text as a violation:\n{exc}")
     finally:
         doc.write_text(src, encoding="utf-8", newline="\n")
+
+
+def test_the_renamed_controls_exist():
+    """The ban must not be satisfiable by deleting the control that needed renaming.
+
+    Renaming the pairing-method option and the user ID field is the point of the change. If
+    either were dropped or reverted, a passing terminology test would be hiding a broken UI
+    rather than a renamed one.
+    """
+    flow = (ROOT / "custom_components/oupes_mega_ble/config_flow.py").read_text(encoding="utf-8")
+    strings = json.loads(
+        (ROOT / "custom_components/oupes_mega_ble/strings.json").read_text(encoding="utf-8")
+    )
+    option = re.search(r'KEY_METHOD_ACCOUNT:\s*"([^"]+)"', flow)
+    assert option and "user ID" in option.group(1), (
+        "the pairing-method selector must offer an option labelled with 'user ID' "
+        f"(found: {option.group(1) if option else 'nothing'})"
+    )
+    for section in ("config", "options"):
+        step = strings[section]["step"]["account_number"]
+        assert "User ID" in step["title"], f"{section}.account_number title: {step['title']!r}"
+        assert step["data"]["user_id"].strip() == "User ID", (
+            f"{section}.account_number field label: {step['data']['user_id']!r}"
+        )
 
 
 def test_allowed_labels_are_still_what_the_code_ships():
