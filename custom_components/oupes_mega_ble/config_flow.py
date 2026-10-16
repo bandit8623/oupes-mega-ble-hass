@@ -59,6 +59,7 @@ from .const import (
     CONF_DEVICE_ID,
     CONF_DEVICE_KEY,
     CONF_IDENTITY_SOURCE,
+    CONF_LIVE_PUSH_INTERVAL,
     CONF_NAME,
     CONF_OPEN_ID,
     CONF_POLL_INTERVAL,
@@ -67,6 +68,7 @@ from .const import (
     CONF_STALE_TIMEOUT,
     CONF_USER_ID,
     DOMAIN,
+    LIVE_PUSH_MIN_INTERVAL,
     IDENTITY_SOURCE_CLOUD,
     IDENTITY_SOURCE_DERIVED,
     IDENTITY_SOURCE_LOCAL,
@@ -941,6 +943,9 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             poll_interval = int(user_input.get(
                 CONF_POLL_INTERVAL, UPDATE_INTERVAL.total_seconds()
             ))
+            live_push_interval = float(user_input.get(
+                CONF_LIVE_PUSH_INTERVAL, LIVE_PUSH_MIN_INTERVAL
+            ))
             stale_timeout = int(user_input.get(
                 CONF_STALE_TIMEOUT, STALE_TIMEOUT.total_seconds() // 60
             ))
@@ -952,6 +957,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             options = {
                 CONF_CONTINUOUS: continuous,
                 CONF_POLL_INTERVAL: poll_interval,
+                CONF_LIVE_PUSH_INTERVAL: live_push_interval,
                 CONF_STALE_TIMEOUT: stale_timeout,
                 CONF_RUNTIME_MAX: runtime_max,
                 CONF_DEBUG_ATTRS: debug_attrs,
@@ -981,6 +987,7 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         default_poll = int(UPDATE_INTERVAL.total_seconds())
         default_stale = int(STALE_TIMEOUT.total_seconds() // 60)
+        default_live_push = float(LIVE_PUSH_MIN_INTERVAL)
 
         return self.async_show_form(
             step_id="connection_settings",
@@ -991,6 +998,12 @@ class OUPESMegaConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         CONF_POLL_INTERVAL, default=default_poll,
                     ): NumberSelector(NumberSelectorConfig(
                         min=10, max=600, step=1, mode=NumberSelectorMode.BOX,
+                        unit_of_measurement="seconds",
+                    )),
+                    vol.Optional(
+                        CONF_LIVE_PUSH_INTERVAL, default=default_live_push,
+                    ): NumberSelector(NumberSelectorConfig(
+                        min=1, max=30, step=1, mode=NumberSelectorMode.BOX,
                         unit_of_measurement="seconds",
                     )),
                     vol.Optional(
@@ -1276,6 +1289,7 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
         )
         default_poll = int(UPDATE_INTERVAL.total_seconds())
         default_stale = int(STALE_TIMEOUT.total_seconds() // 60)
+        default_live_push = float(LIVE_PUSH_MIN_INTERVAL)
 
         if user_input is not None:
             raw_key = str(user_input.get(CONF_DEVICE_KEY, "") or "").strip()
@@ -1367,6 +1381,9 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                 opts[CONF_POLL_INTERVAL] = int(
                     user_input.get(CONF_POLL_INTERVAL, default_poll)
                 )
+                opts[CONF_LIVE_PUSH_INTERVAL] = float(
+                    user_input.get(CONF_LIVE_PUSH_INTERVAL, default_live_push)
+                )
                 opts[CONF_STALE_TIMEOUT] = int(
                     user_input.get(CONF_STALE_TIMEOUT, default_stale)
                 )
@@ -1401,6 +1418,15 @@ class OUPESMegaOptionsFlow(config_entries.OptionsFlow):
                         default=self._entry.options.get(CONF_POLL_INTERVAL, default_poll),
                     ): NumberSelector(NumberSelectorConfig(
                         min=10, max=600, step=1, mode=NumberSelectorMode.BOX,
+                        unit_of_measurement="seconds",
+                    )),
+                    vol.Optional(
+                        CONF_LIVE_PUSH_INTERVAL,
+                        default=float(self._entry.options.get(
+                            CONF_LIVE_PUSH_INTERVAL, default_live_push
+                        )),
+                    ): NumberSelector(NumberSelectorConfig(
+                        min=1, max=30, step=1, mode=NumberSelectorMode.BOX,
                         unit_of_measurement="seconds",
                     )),
                     vol.Optional(

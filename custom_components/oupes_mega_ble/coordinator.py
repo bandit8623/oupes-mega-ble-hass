@@ -79,6 +79,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         user_id: int = 0,
         continuous: bool = False,
         poll_interval_seconds: int = 30,
+        live_push_interval_seconds: float = LIVE_PUSH_MIN_INTERVAL,
         stale_timeout_minutes: int = 15,
         debug_attrs: bool = False,
         debug_raw: bool = False,
@@ -111,6 +112,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             device_key, open_id=open_id, user_id=user_id
         )
         self._continuous = continuous
+        self._live_push_interval = max(1.0, float(live_push_interval_seconds))
         self._live_data: OUPESData | None = None
         self._continuous_task: asyncio.Task | None = None
         # Build Cmd2 query packets that read this device's supported settings.
@@ -455,7 +457,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             """
             if c_push_pending[0]:
                 return
-            wait = LIVE_PUSH_MIN_INTERVAL - (_time.monotonic() - c_last_push[0])
+            wait = self._live_push_interval - (_time.monotonic() - c_last_push[0])
             if wait > 0:
                 c_push_pending[0] = True
                 # async_call_later lives in helpers.event, not on the

@@ -16,6 +16,7 @@ from .const import (
     CONF_DEBUG_ATTRS,
     CONF_DEBUG_RAW,
     CONF_DEVICE_KEY,
+    CONF_LIVE_PUSH_INTERVAL,
     CONF_NAME,
     CONF_OPEN_ID,
     CONF_POLL_INTERVAL,
@@ -24,6 +25,7 @@ from .const import (
     CONF_STALE_TIMEOUT,
     CONF_USER_ID,
     DOMAIN,
+    LIVE_PUSH_MIN_INTERVAL,
     STALE_TIMEOUT,
     UPDATE_INTERVAL,
 )
@@ -45,6 +47,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     poll_interval: int = entry.options.get(
         CONF_POLL_INTERVAL, int(UPDATE_INTERVAL.total_seconds())
     )
+    try:
+        live_push_interval: float = float(entry.options.get(
+            CONF_LIVE_PUSH_INTERVAL, LIVE_PUSH_MIN_INTERVAL
+        ))
+    except (TypeError, ValueError):
+        live_push_interval = LIVE_PUSH_MIN_INTERVAL
     stale_timeout: int = entry.options.get(
         CONF_STALE_TIMEOUT, int(STALE_TIMEOUT.total_seconds() // 60)
     )
@@ -77,6 +85,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         user_id=user_id,
         continuous=continuous,
         poll_interval_seconds=poll_interval,
+        live_push_interval_seconds=live_push_interval,
         stale_timeout_minutes=stale_timeout,
         debug_attrs=debug_attrs,
         debug_raw=debug_raw,

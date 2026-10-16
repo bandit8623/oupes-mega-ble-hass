@@ -22,12 +22,13 @@ STALE_TIMEOUT = timedelta(minutes=15)
 # How many seconds to hold the BLE connection collecting notifications per poll
 SCAN_DURATION = 15.0
 
-# Minimum seconds between live pushes to Home Assistant in continuous mode.
-# A burst of notifications is coalesced into one state-machine event per window;
-# the last notification of a burst is never dropped (trailing-edge throttle).
-# 2 s is comfortably below anything a human reads as "slow" and comfortably
-# above what a chatty notification stream would send straight at HA's bus.
-LIVE_PUSH_MIN_INTERVAL = 2.0
+# Default minimum seconds between live pushes to Home Assistant in continuous
+# mode. A burst of notifications is coalesced into one state-machine event per
+# window; the last notification of a burst is never dropped (trailing-edge
+# throttle). User-tunable per entry via CONF_LIVE_PUSH_INTERVAL (Configure);
+# measured on a live station: 1 s and 2 s cost the same CPU to two decimals,
+# and the station's own stream paces updates at ~2-3 s regardless.
+LIVE_PUSH_MIN_INTERVAL = 1.0
 
 # Max cold-probe retries per coordinator update cycle
 MAX_ATTEMPTS = 5
@@ -69,6 +70,7 @@ CONF_CONTINUOUS = "continuous_connection"
 
 # Config entry options - user-tuneable polling parameters (non-continuous mode).
 CONF_POLL_INTERVAL = "poll_interval"        # seconds between polls (default 30)
+CONF_LIVE_PUSH_INTERVAL = "live_push_interval"  # live-push throttle, seconds (default 1)
 CONF_STALE_TIMEOUT = "stale_timeout"        # minutes before marking unavailable (default 15)
 
 # Debug: log unknown/interesting attr values to a CSV in the HA config dir.
