@@ -8,6 +8,37 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.9 - 2026-10-16
+
+### Added
+
+- **DC input voltage sensors** (Guardian V2): the packed input-voltage field
+  (dpid 115) is now split unconditionally into `dc_input_1_voltage` and
+  `dc_input_2_voltage` — two unpowered inputs are a meaningful 0.0 V + 0.0 V,
+  so there is no absurd-value gate and no misleading sum. Which half is which
+  physical XT60 was established by the owner's unplug test on one unit; the
+  wire itself never names a connector, and the docs say so.
+- **Combined Battery Reserve** (`battery_reserve`): one sensor averaging main
+  pack plus every external pack reporting this update (0-8 packs, silent
+  slots skipped, zero treated as data). The math lives in the HA-free
+  `protocol.average_pack_soc()` so it is unit-tested, not YAML-template
+  per-house math.
+
+### Changed
+
+- **Guardian no longer publishes a USB/XT90 output switch.** Field testing
+  (two enable-writes, multimeter across the USB ports) showed the firmware
+  ignores group bit 2 on this series; publishing a control the device refuses
+  teaches users the integration lies. The 12 V/car switch is labeled
+  **DC Output** to match the single physical DC button on the front panel.
+  Orphaned entities are filtered from setup; remove stale registry entries via
+  Settings → Devices → remove service entries if present.
+
+### Documentation
+
+- README: app/cloud + HA/BLE coexistence — the one-client rule is Bluetooth
+  only; the app over Wi-Fi and HA over BLE run side by side indefinitely.
+
 ## 1.4.8 - 2026-10-15
 
 ### Fixed

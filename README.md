@@ -151,6 +151,14 @@ less than the cost of a cable run.
    Cleanergy app or switch the phone's Bluetooth off, because the station answers
    one Bluetooth client at a time.
 
+> **Living with the Cleanergy app.** The one-client rule applies to the *Bluetooth*
+> radio only. Once the phone's BLE is off (or the app stays in cloud mode), the
+> app keeps working over the station's Wi-Fi uplink while Home Assistant keeps
+> its BLE stream — the two have been observed side by side indefinitely. If the
+> dashboard suddenly goes `unavailable` while someone is in the app standing next
+> to the station, it is the phone borrowing the BLE slot; close the app (or
+> toggle Bluetooth off) and the integration reconnects on its own.
+
 Releases are tagged, so HACS installs a specific version rather than a moving
 branch. Installing over an existing copy of this integration is fine — the domain
 is unchanged, so entities and the config entry survive.
