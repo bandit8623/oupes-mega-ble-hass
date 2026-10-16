@@ -8,6 +8,29 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.8 - 2026-10-15
+
+### Fixed
+
+- **BLE proxy wedge after Home Assistant restarts.** Every config-entry
+  reload or HA restart leaked the station's GATT connection onto the ESP32
+  Bluetooth proxy: `async_unload_entry` never stopped the continuous task
+  nor disconnected its BLE client, and the task's `finally:
+  await client.disconnect()` was being cancelled before the disconnect
+  could reach the radio. Two or three leaked slots exhaust a proxy's tiny
+  connection pool and wedge BLE for *every* device on it (field-observed:
+  station and two Yale locks all failing with `ESP_GATT_ERROR` /
+  connect timeouts until the proxies were power-cycled). The coordinator
+  now tracks the open client, `async_shutdown()` cancels the task *and*
+  disconnects it with `asyncio.shield()` so the goodbye survives
+  cancellation, and unload awaits it. Setup-cancellation also propagates
+  unchanged instead of being converted to `ConfigEntryNotReady`, which had
+  been holding a reload task past HA's shutdown final-write stage.
+
+### Tests
+
+- 3 new tripwire tests for the teardown contract (185 total).
+
 ## 1.4.7 - 2026-10-15
 
 Live speed. On a continuous connection, Home Assistant now hears from the
