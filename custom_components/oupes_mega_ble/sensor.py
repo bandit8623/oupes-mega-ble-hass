@@ -158,9 +158,8 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.WATT,
     ),
     # DC input voltages, dpid 115: one packed u16 pair at 0.1 V each (see
-    # WP_ALWAYS_SPLIT_U16_DPIDS in protocol.py for the wire evidence). The
-    # halves are published as pseudo-dpids 11501/11502; which half belongs to
-    # which physical socket is not yet verified on this model.
+    # WP_ALWAYS_SPLIT_U16_DPIDS in protocol.py for the wire evidence and the
+    # unplug test that pins low half = top XT60 port = DC Input 1).
     OUPESSensorDescription(
         key="dc_input_1_voltage",
         attr=115,

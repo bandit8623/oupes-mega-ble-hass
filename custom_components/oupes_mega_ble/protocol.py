@@ -499,9 +499,13 @@ WP_SPLIT_U16_PSEUDO_BASE: dict[int, int] = {23: 2301}
 # Wire capture 2026-10-15 (station idle, night): `0a 05 73 80059605 ...` ->
 # u32 93717888 -> LE u16 pair 1408 / 1430 -> 140.8 V and 143.0 V, matching the
 # two ~140 V DC-input readings the Cleanergy app showed at the same moment.
-# Which half is which physical socket is unverified (same open question as
-# dpid 23) - the app-vs-sensor comparison that settles it is documented in
-# docs/GUARDIAN-WP-BLE.md.
+# Half-to-socket mapping VERIFIED by unplug test 2026-10-15 23:32: pulling the
+# TOP XT60 input made the low half decay 140.8 -> 20 V over ~2 min (residual
+# drain) while the high half held 143.0 V with its string still connected.
+# So low = physical DC Input 1 = top XT60 port; high = Input 2. The dpid-23
+# power halves remain unverified separately, but both fields use the same
+# LE-low-first order, which makes matching input order across the two
+# fields - and with the app's Input 1/2 labels - the consistent reading.
 WP_ALWAYS_SPLIT_U16_DPIDS: dict[int, int] = {115: 11501}
 # Above this, a dpid-23 reading cannot be plain watts: no supported unit takes more
 # than ~6 kW of input, so a value >= 65536 W must be two packed uint16 readings.  This

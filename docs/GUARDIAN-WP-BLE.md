@@ -367,6 +367,15 @@ people ask about:
   claims about which physical socket on the case feeds which entity — nobody has verified
   that, and the wire gives no label to work from. To find out on your own unit: shade one
   string and watch which of the two entities drops.
+* `dc_input_1_voltage`, `dc_input_2_voltage` — dpid 115 carries both DC input voltages
+  as a second packed pair (0.1 V per half), split the same way. Unlike the power halves,
+  these show open-circuit panel voltage even when the station draws nothing, so they can
+  be verified while the station is deliberately not charging: an unplug test on
+  2026-10-15 pulled the **top XT60 port** and watched the low half decay 140.8 → 20 V
+  (capacitor drain) while the high half held 143.0 V. **Low half = top port = Input 1.**
+  The two voltage halves share the field order of dpid 23, and both match the app's
+  Input 1 / Input 2 labelling, so the voltage result is the best evidence available
+  that the power entities use the same physical order.
   What they are physically: the station's **dual XT60 PV inputs**, per the owner of the
   unit tested here. That is reported, not measured — nothing in the BLE stream names a
   connector, and it still does not say which of the two identical sockets is Input 1.
