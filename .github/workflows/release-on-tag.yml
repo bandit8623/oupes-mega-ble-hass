@@ -13,10 +13,23 @@ on:
   push:
     tags:
       - "v*"
+  # Manual re-run / validation: run this workflow with a tag name (existing
+  # release -> the idempotence path, end to end on a real runner) or the
+  # default (the tag that triggered the last run).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)ensure a GitHub Release for, e.g. v1.4.7"
+        required: false
+        default: ""
 
 permissions:
-  contents: read
-  releases: write
+  # 'releases' is NOT an accepted permission scope in the workflow schema
+  # (verified with actionlint; the REST docs page for it is how everyone
+  # assumes it exists). An unknown scope fails the run at scheduling: zero
+  # jobs, zero logs, run named after the file path - the worst possible
+  # failure to debug. Release creation runs under contents:write.
+  contents: write
 
 jobs:
   ensure-github-release:
@@ -34,7 +47,7 @@ jobs:
       - name: Create release if it does not already exist
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           API: ${{ github.api_url }}/repos/${{ github.repository }}
         run: |
           python - <<'PY'

@@ -33,8 +33,11 @@ def test_release_workflow_can_create_releases():
     text = WORKFLOW.read_text(encoding="utf-8")
     assert re.search(r"^permissions:", text, re.M), \
         "workflow must declare explicit permissions"
-    assert re.search(r"^\s*releases:\s*write\s*$", text, re.M), \
-        "workflow needs releases:write or it silently fails on private runners"
+    assert re.search(r"^\s*contents:\s*write\s*$", text, re.M), \
+        "release creation needs contents:write; 'releases:' is not a valid " \
+        "permission scope and fails the run at scheduling with no logs"
+    assert "releases:" not in text.split("jobs:")[0], \
+        "'releases' is not an accepted permission scope - do not put it back"
 
 
 def test_release_workflow_is_idempotent():
