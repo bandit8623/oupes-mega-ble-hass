@@ -15,6 +15,11 @@ jobs:
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # tags are NOT fetched by default in actions/checkout@v4;
+          # test_release_pipeline_guards compares CHANGELOG entries to
+          # `git tag` and CI must see the same tag list the dev box sees.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
@@ -38,6 +43,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # tags are NOT fetched by default in actions/checkout@v4;
+          # test_release_pipeline_guards compares CHANGELOG entries to
+          # `git tag` and CI must see the same tag list the dev box sees.
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
