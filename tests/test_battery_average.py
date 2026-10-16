@@ -63,6 +63,19 @@ def test_rounding_half_up_on_banker_risk():
     assert protocol.average_pack_soc({3: 3}, _ext(slot1=4)) == 4
 
 
+def test_sensor_description_exists():
+    """The value branch without a registered description shows up as NO entity
+    at all (silent in every test that only imports protocol) - this happened
+    for real when a multi-edit rollback dropped the description edit. Check
+    the wiring in the sensor source directly."""
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components/oupes_mega_ble/sensor.py"
+    ).read_text(encoding="utf-8")
+    assert 'key="battery_average"' in src, "description never registered"
+    assert src.count('battery_average') >= 2, "description AND value branch both required"
+
+
 if __name__ == "__main__":
     import traceback
 

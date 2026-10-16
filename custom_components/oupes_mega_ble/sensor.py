@@ -70,6 +70,17 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         native_unit_of_measurement=PERCENTAGE,
     ),
     OUPESSensorDescription(
+        # Average over main + every external pack reporting this update.
+        # attr=3 keeps the entity available on the plain main-device path;
+        # the value branch below ignores it and calls protocol.average_pack_soc.
+        key="battery_average",
+        attr=3,
+        name="Battery Average",
+        device_class=SensorDeviceClass.BATTERY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=PERCENTAGE,
+    ),
+    OUPESSensorDescription(
         key="total_output_power",
         attr=4,
         name="Total Output Power",
