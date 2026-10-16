@@ -72,8 +72,8 @@ def test_sensor_description_exists():
         Path(__file__).resolve().parents[1]
         / "custom_components/oupes_mega_ble/sensor.py"
     ).read_text(encoding="utf-8")
-    assert 'key="battery_average"' in src, "description never registered"
-    assert src.count('battery_average') >= 2, "description AND value branch both required"
+    assert 'key="battery_reserve"' in src, "description never registered"
+    assert src.count('battery_reserve') >= 2, "description AND value branch both required"
 
 
 if __name__ == "__main__":

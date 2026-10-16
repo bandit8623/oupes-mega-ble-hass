@@ -73,9 +73,9 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         # Average over main + every external pack reporting this update.
         # attr=3 keeps the entity available on the plain main-device path;
         # the value branch below ignores it and calls protocol.average_pack_soc.
-        key="battery_average",
+        key="battery_reserve",
         attr=3,
-        name="Battery Average",
+        name="Combined Battery Reserve",
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
@@ -378,7 +378,7 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
         if self.coordinator.data is None:
             return None
         desc = self.entity_description
-        if desc.key == "battery_average":
+        if desc.key == "battery_reserve":
             return average_pack_soc(
                 self.coordinator.data["attrs"],
                 self.coordinator.data.get("ext_batteries"),
