@@ -492,6 +492,17 @@ WP_TLV_SIZE = 7
 # and leaves the aggregate reading intact.
 WP_SPLIT_U16_DPIDS: set[int] = {23}
 WP_SPLIT_U16_PSEUDO_BASE: dict[int, int] = {23: 2301}
+# Dpids whose record is ALWAYS a packed u16 pair, whatever the reading - so
+# they are split even when the combined value is too small to prove it.
+#
+# 115 (0x73): DC input 1 & 2 voltages on the Guardian 6000 V2, 0.1 V each.
+# Wire capture 2026-10-15 (station idle, night): `0a 05 73 80059605 ...` ->
+# u32 93717888 -> LE u16 pair 1408 / 1430 -> 140.8 V and 143.0 V, matching the
+# two ~140 V DC-input readings the Cleanergy app showed at the same moment.
+# Which half is which physical socket is unverified (same open question as
+# dpid 23) - the app-vs-sensor comparison that settles it is documented in
+# docs/GUARDIAN-WP-BLE.md.
+WP_ALWAYS_SPLIT_U16_DPIDS: dict[int, int] = {115: 11501}
 # Above this, a dpid-23 reading cannot be plain watts: no supported unit takes more
 # than ~6 kW of input, so a value >= 65536 W must be two packed uint16 readings.  This
 # also keeps the split from ever firing on the models where dpid 23 genuinely is a
@@ -538,15 +549,17 @@ def _split_packed_power(parsed: dict, *, packed_certain: bool = False) -> dict:
     aggregate is lo + hi.
     """
     try:
-        for dpid in WP_SPLIT_U16_DPIDS:
+        for dpid in set(WP_SPLIT_U16_DPIDS) | set(WP_ALWAYS_SPLIT_U16_DPIDS):
             val = parsed.get(dpid)
-            base = WP_SPLIT_U16_PSEUDO_BASE[dpid]
+            base = WP_SPLIT_U16_PSEUDO_BASE.get(dpid) or WP_ALWAYS_SPLIT_U16_DPIDS[dpid]
             if base in parsed or base + 1 in parsed:
                 continue  # already split (also makes this idempotent)
-            if isinstance(val, int) and (packed_certain or val >= WP_SPLIT_U16_ABSURD):
+            always = dpid in WP_ALWAYS_SPLIT_U16_DPIDS
+            if isinstance(val, int) and (always or packed_certain or val >= WP_SPLIT_U16_ABSURD):
                 lo = val & 0xFFFF
                 hi = val >> 16
-                parsed[dpid] = lo + hi
+                if not always:
+                    parsed[dpid] = lo + hi  # power halves aggregate; volts don't
                 parsed[base] = lo
                 parsed[base + 1] = hi
     except Exception:  # never let a decode nicety break a poll cycle

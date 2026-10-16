@@ -14,6 +14,7 @@ from homeassistant.components.sensor import (
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
+    UnitOfElectricPotential,
     UnitOfPower,
     UnitOfTemperature,
     UnitOfTime,
@@ -155,6 +156,32 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
+    ),
+    # DC input voltages, dpid 115: one packed u16 pair at 0.1 V each (see
+    # WP_ALWAYS_SPLIT_U16_DPIDS in protocol.py for the wire evidence). The
+    # halves are published as pseudo-dpids 11501/11502; which half belongs to
+    # which physical socket is not yet verified on this model.
+    OUPESSensorDescription(
+        key="dc_input_1_voltage",
+        attr=115,
+        data_key=11501,
+        name="DC Input 1 Voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        value_fn=lambda v: round(v / 10, 1),
+        entity_registry_enabled_default=True,
+    ),
+    OUPESSensorDescription(
+        key="dc_input_2_voltage",
+        attr=115,
+        data_key=11502,
+        name="DC Input 2 Voltage",
+        device_class=SensorDeviceClass.VOLTAGE,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfElectricPotential.VOLT,
+        value_fn=lambda v: round(v / 10, 1),
+        entity_registry_enabled_default=True,
     ),
     OUPESSensorDescription(
         key="remaining_runtime",

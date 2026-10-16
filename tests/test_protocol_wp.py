@@ -124,6 +124,36 @@ def test_identity_selects_config_net_info() -> None:
 # -- packed telemetry ---------------------------------------------------------
 
 
+def test_dpid115_voltage_pair_always_splits() -> None:
+    """attr 115 is a packed u16 pair of DC input voltages (0.1 V each).
+
+    The value 93717888 is byte-identical to an idle-night capture from a
+    Guardian 6000 V2 on 2026-10-15 (frame `0a 05 73 80059605 ...`); the
+    Cleanergy app showed 140.8 V and 143.0 V on the two DC inputs at the
+    same moment. Unlike dpid 23, this field must split even at 0 (two
+    unpowered inputs are a meaningful 0.0 V + 0.0 V), must NOT be replaced
+    by a meaningless lo+hi aggregate, and splits without any
+    packed_certain hint.
+    """
+    out = protocol._split_packed_power({115: 93717888})
+    assert out[11501] == 1408, "low half = first DC input, 140.8 V"
+    assert out[11502] == 1430, "high half = second DC input, 143.0 V"
+    assert out[115] == 93717888, "raw packed value must be preserved"
+
+    # 0 splits too - that is the whole point of the always-split set.
+    zero = protocol._split_packed_power({115: 0})
+    assert zero[11501] == 0 and zero[11502] == 0
+
+    # Idempotent, like the dpid-23 path.
+    again = protocol._split_packed_power(dict(out))
+    assert again[11501] == 1408 and again[11502] == 1430
+
+    # And through the real decode path, end to end:
+    payload = tlv(115, 93717888) + tlv(3, 65)
+    decoded = protocol.parse_packet_sequence(wp_frames(payload))
+    assert decoded[11501] == 1408 and decoded[11502] == 1430
+
+
 def test_packed_dc_inputs_are_split() -> None:
     """attr 23 holds both DC inputs as two uint16 halves; the sum is the real power.
 
