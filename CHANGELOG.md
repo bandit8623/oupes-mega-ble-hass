@@ -438,7 +438,7 @@ station actually accepted and refused, so a refactor cannot quietly change the h
   `userId` at login, and the empty-`bind` response an unbound station returns).
   CI now runs every test file standalone, not just the protocol one.
 
-## v1.3.0
+## 1.3.0 - 2026-10-13
 
 Guardian / D5 V2 stations (BLE name `WP`) — the reason this fork exists.
 Verified end-to-end on a Guardian 6000 V2 (`product_id` `95haDY`) running

@@ -47,6 +47,11 @@ authors' work — `@acalcutt` and `@HeedfulCrayon` are both listed as code owner
 upstream for that reason. Anything in the protocol documentation that pre-dates
 v1.3.0 is theirs; the differences below are ours.
 
+Maintainers: releases are cut by the checklist in
+[`docs/RELEASING.md`](docs/RELEASING.md) - pushing a `v*` tag auto-creates the
+GitHub Release via `release-on-tag.yml`, because a tag without a release object
+is invisible to HACS "Last release" tracking (this bit us at v1.4.6/v1.4.7).
+
 ### v1.4.0
 
 - **Your user ID is the whole credential.** The binding key is

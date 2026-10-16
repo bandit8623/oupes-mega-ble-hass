@@ -1,0 +1,84 @@
+name: Release on tag
+
+# Why this exists: `git push --follow-tags` publishes the *tag*, but GitHub's
+# "Releases" box and - critically - HACS custom repositories configured to
+# track "Last release" read the *release object*, which tags do not create.
+# v1.4.6 and v1.4.7 shipped as tags with no release; users sat on v1.4.5 with
+# green tests and a pushed tag everywhere they looked. So the release object
+# is now machine-made: tag push -> release exists. There is no human step to
+# forget. The job is idempotent (it verifies before creating), so re-running
+# it or creating the release manually first are both safe.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  releases: write
+
+jobs:
+  ensure-github-release:
+    name: Create GitHub Release from tag
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # CHANGELOG.md at the tag; no history needed beyond it
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Create release if it does not already exist
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
+          API: ${{ github.api_url }}/repos/${{ github.repository }}
+        run: |
+          python - <<'PY'
+          import json, os, re, sys, urllib.request, urllib.error
+
+          tag, api, token = os.environ["TAG"], os.environ["API"], os.environ["GH_TOKEN"]
+          ver = tag.removeprefix("v")
+          headers = {"Authorization": f"Bearer {token}",
+                     "Content-Type": "application/json",
+                     "User-Agent": "release-on-tag"}
+
+          def req(method, path, data=None):
+              r = urllib.request.Request(api + path, method=method,
+                                         headers=headers,
+                                         data=json.dumps(data).encode() if data else None)
+              return json.load(urllib.request.urlopen(r))
+
+          # Idempotence: an existing release (manual, or a workflow re-run) wins.
+          try:
+              existing = req("GET", f"/releases/tags/{tag}")
+              print(f"Release for {tag} already exists: {existing['html_url']} - leaving it alone.")
+              sys.exit(0)
+          except urllib.error.HTTPError as e:
+              if e.code != 404:
+                  raise
+
+          # Body: this version's CHANGELOG section, minus its '## x.y.z' title line.
+          text = open("CHANGELOG.md", encoding="utf-8").read()
+          m = re.search(r"^## " + re.escape(ver) + r" - [^\n]*\n(.*?)(?=^## |\Z)",
+                        text, re.M | re.S)
+          if m:
+              body = m.group(1).strip()
+          else:
+              # A tag without a changelog entry is a process smell: say so loudly
+              # in the release itself rather than shipping a silent, empty page.
+              body = (f"Version `{tag}`. No `## {ver}` section was found in "
+                      f"CHANGELOG.md at this tag - the release notes were left "
+                      f"empty by the automation, which means the changelog step "
+                      f"of the release checklist was skipped. Please fix.")
+              print("::warning title=Missing CHANGELOG entry::CHANGELOG.md has no "
+                    f"'## {ver}' section at this tag.")
+
+          name = f"{tag}"
+          rel = req("POST", "/releases",
+                    {"tag_name": tag, "name": name, "body": body})
+          print(f"Created: {rel['html_url']}")
+          PY
