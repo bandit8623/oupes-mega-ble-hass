@@ -112,6 +112,13 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             device_key, open_id=open_id, user_id=user_id
         )
         self._continuous = continuous
+        # The BLE client currently held open by the continuous task, so a
+        # shutdown can close it explicitly. BLE proxies expose a small fixed
+        # number of connection slots; a link left open across an HA restart
+        # wedges the proxy for every BLE device in the house (field-measured
+        # with a Guardian and a Yale lock both failing to connect after
+        # repeated HA reloads).
+        self._active_client: BleakClient | None = None
         self._live_push_interval = max(1.0, float(live_push_interval_seconds))
         self._live_data: OUPESData | None = None
         self._continuous_task: asyncio.Task | None = None
@@ -553,6 +560,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             disconnected_callback=on_disconnect,
             max_attempts=2,
         )
+        self._active_client = client
         try:
             await asyncio.sleep(1.8)
             if disconnected_event.is_set():
@@ -651,10 +659,34 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             )
             raise
         finally:
+            if self._active_client is client:
+                self._active_client = None
             try:
-                await client.disconnect()
+                # shield(): if this task is being cancelled as part of an HA
+                # reload/shutdown, a plain await would be interrupted before
+                # the disconnect reaches the ESP32, leaking the proxy's
+                # connection slot. shield() lets the disconnect finish in the
+                # background even if our caller no longer waits for it.
+                await asyncio.shield(asyncio.wait_for(client.disconnect(), 5.0))
             except Exception:  # noqa: BLE001
                 pass
+
+    async def async_shutdown(self) -> None:
+        """Stop polling AND release the held BLE connection.
+
+        The base class cancels the update task; it knows nothing about the
+        long-lived client the continuous task keeps open. Without this, every
+        config-entry reload or HA restart strands one GATT connection on the
+        BLE proxy, and two or three of those wedge the proxy for everything.
+        """
+        self.stop_continuous_connection()
+        client, self._active_client = self._active_client, None
+        if client is not None:
+            try:
+                await asyncio.shield(asyncio.wait_for(client.disconnect(), 5.0))
+            except Exception:  # noqa: BLE001
+                pass
+        await super().async_shutdown()
 
     # -- Internal BLE connection logic ----------------------------------------
 

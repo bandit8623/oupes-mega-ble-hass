@@ -97,9 +97,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     try:
         await coordinator.async_config_entry_first_refresh()
     except asyncio.CancelledError:
-        raise ConfigEntryNotReady(
-            f"Setup for OUPES Mega {address} was interrupted — will retry"
-        )
+        # Normal during reload/shutdown - let it propagate so HA can finish.
+        # Converting this to ConfigEntryNotReady was observed holding the
+        # reload task past HA's final-write stage at shutdown.
+        raise
     except Exception as exc:
         raise ConfigEntryNotReady(
             f"Could not connect to OUPES Mega {address}: {exc}"
@@ -125,6 +126,12 @@ async def _async_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> Non
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
+    coordinator = hass.data.get(DOMAIN, {}).get(entry.entry_id)
+    if coordinator is not None:
+        # Stops the continuous task and, critically, closes the GATT link so
+        # the BLE proxy's connection slot is released. Skipping this is what
+        # wedged the ESP32 proxies after repeated restarts.
+        await coordinator.async_shutdown()
     unload_ok = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
     if unload_ok:
         hass.data[DOMAIN].pop(entry.entry_id, None)
