@@ -409,6 +409,23 @@ the station. **BLE is the only path**, so that is the one to make reliable.
 
 ---
 
+## Tuning (Settings → Devices & Services → your OUPES entry → **Configure**, the cog)
+
+Every field below lives in that one dialog; saving reloads the entry and applies
+immediately — nothing on the station is touched.
+
+| Field | What it does |
+|---|---|
+| **Live update throttle (seconds)** | Continuous mode only: the shortest gap between two state pushes to Home Assistant. Notifications always arrive when the station sends them (~2–3 s while values change); this only coalesces bursts. Measured on a live station: 1 s and 2 s are indistinguishable in CPU (≈0.25 % of the HA core either way). Range 1–30, default 1. |
+| **Poll interval (seconds)** | Non-continuous mode only: how often HA connects, pulls, and disconnects. Range 10–600, default 30. Ignored while continuous mode is up. |
+| **Continuous BLE connection** | Keep the link open and receive the station's notification stream, vs. poll-and-release. Continuous blocks the vendor app from connecting at the same time. |
+| **Stale timeout (minutes)** | How long the last known values keep showing after a failed poll before entities go `unavailable`. Range 1–120, default 15. |
+| **Runtime noise filter (minutes)** | Clamp ceiling for the firmware's sometimes-silly `time_to_full` values. Raise above 99 h only if your stack genuinely runs that long. |
+| **Cloud openId / userId** | Guardian / D5 V2 (`WP`) stations only — see [the identity section](#guardian--d5-v2-wp--needs-the-user-id-once). Changing either re-pairs the station. |
+| **Debug CSV toggles** | Attribute / raw-packet logging to files in your HA config folder, for diagnosis sessions. Leave off in daily use. |
+
+---
+
 ## Supported Models
 
 | Series | Models |
