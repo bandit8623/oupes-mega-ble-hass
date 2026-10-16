@@ -4,7 +4,9 @@ from __future__ import annotations
 import asyncio
 import csv
 import logging
+import threading as _threading
 import time as _time
+import traceback as _traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -14,6 +16,7 @@ from bleak_retry_connector import establish_connection
 
 from homeassistant.components.bluetooth import async_ble_device_from_address
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.event import async_call_later
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .const import (
@@ -402,9 +405,31 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         # becoming a burst of HA state-machine events.
         c_last_push: list[float] = [0.0]
         c_push_pending: list[bool] = [False]
+        _push_snapshot_warned = [False]
 
         def _push_snapshot() -> None:
             """Publish the current attrs to HA. Event-loop thread only."""
+            # Field-measured (live station, 2026-10-15): this can be reached
+            # from a SyncWorker thread - HA's frame check caught it red-handed
+            # and warned about state corruption. Any non-loop caller is hopped
+            # to the loop instead of pushed, with one WARNING carrying the real
+            # caller stack, so the root cause gets named in the log instead of
+            # being guessed at from a thread label.
+            try:
+                on_loop = asyncio.get_running_loop() is self.hass.loop
+            except RuntimeError:
+                on_loop = False
+            if not on_loop:
+                if not _push_snapshot_warned[0]:
+                    _push_snapshot_warned[0] = True
+                    _LOGGER.warning(
+                        "oupes_mega_ble: live push was requested off the event "
+                        "loop (thread=%s); hopped to the loop. Origin stack:\n%s",
+                        _threading.current_thread().name,
+                        "".join(_traceback.format_stack()),
+                    )
+                self.hass.loop.call_soon_threadsafe(_push_snapshot)
+                return
             if disconnected_event.is_set():
                 return
             if not (attrs or any(ext_batteries.values())):
@@ -433,8 +458,11 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             wait = LIVE_PUSH_MIN_INTERVAL - (_time.monotonic() - c_last_push[0])
             if wait > 0:
                 c_push_pending[0] = True
+                # async_call_later lives in helpers.event, not on the
+                # HomeAssistant object - found out on a live station, which is
+                # why this build is field-tested before it is tagged.
                 self.hass.loop.call_soon_threadsafe(
-                    lambda: self.hass.async_call_later(wait, lambda _n: _push_snapshot())
+                    lambda: async_call_later(self.hass, wait, lambda _n: _push_snapshot())
                 )
             else:
                 self.hass.loop.call_soon_threadsafe(_push_snapshot)
