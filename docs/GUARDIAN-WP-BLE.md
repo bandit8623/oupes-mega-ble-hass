@@ -371,7 +371,8 @@ people ask about:
   as a second packed pair (0.1 V per half), split the same way. Unlike the power halves,
   these show open-circuit panel voltage even when the station draws nothing, so they can
   be verified while the station is deliberately not charging: an unplug test on
-  2026-10-15 pulled the **top XT60 port** and watched the low half decay 140.8 → 20 V
+  2026-10-15 - the owner of the tested unit pulled the **top XT60 port** and we
+  watched the low half decay 140.8 → 20 V
   (capacitor drain) while the high half held 143.0 V. **Low half = top port = Input 1.**
   The two voltage halves share the field order of dpid 23, and both match the app's
   Input 1 / Input 2 labelling, so the voltage result is the best evidence available

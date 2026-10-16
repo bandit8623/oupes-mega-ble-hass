@@ -499,8 +499,9 @@ WP_SPLIT_U16_PSEUDO_BASE: dict[int, int] = {23: 2301}
 # Wire capture 2026-10-15 (station idle, night): `0a 05 73 80059605 ...` ->
 # u32 93717888 -> LE u16 pair 1408 / 1430 -> 140.8 V and 143.0 V, matching the
 # two ~140 V DC-input readings the Cleanergy app showed at the same moment.
-# Half-to-socket mapping VERIFIED by unplug test 2026-10-15 23:32: pulling the
-# TOP XT60 input made the low half decay 140.8 -> 20 V over ~2 min (residual
+# Half-to-socket mapping VERIFIED by unplug test 2026-10-15 23:32: the owner
+# of the tested unit pulled the TOP XT60 input and the low half decayed
+# 140.8 -> 20 V over ~2 min (residual
 # drain) while the high half held 143.0 V with its string still connected.
 # So low = physical DC Input 1 = top XT60 port; high = Input 2. The dpid-23
 # power halves remain unverified separately, but both fields use the same

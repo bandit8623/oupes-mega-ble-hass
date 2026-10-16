@@ -159,7 +159,7 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
     ),
     # DC input voltages, dpid 115: one packed u16 pair at 0.1 V each (see
     # WP_ALWAYS_SPLIT_U16_DPIDS in protocol.py for the wire evidence and the
-    # unplug test that pins low half = top XT60 port = DC Input 1).
+    # owner-run unplug test that pins low half = top XT60 port = DC Input 1).
     OUPESSensorDescription(
         key="dc_input_1_voltage",
         attr=115,
