@@ -26,7 +26,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import OUPESMegaCoordinator
-from .protocol import ATTR_MAP
+from .protocol import ATTR_MAP, average_pack_soc
 from .const import series_from_product_id
 
 
@@ -367,6 +367,11 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
         if self.coordinator.data is None:
             return None
         desc = self.entity_description
+        if desc.key == "battery_average":
+            return average_pack_soc(
+                self.coordinator.data["attrs"],
+                self.coordinator.data.get("ext_batteries"),
+            )
         if desc.slot is not None:
             lookup = desc.data_key if desc.data_key is not None else desc.attr
             raw = self.coordinator.data["ext_batteries"].get(desc.slot, {}).get(

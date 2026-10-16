@@ -787,3 +787,40 @@ def parse_packet_sequence(
     return _split_packed_power(
         _parse_packet_sequence_impl(packets), packed_certain=packed_certain
     )
+
+
+def average_pack_soc(
+    attrs: dict[int, int],
+    ext_batteries: dict[int, dict[int, int]] | None,
+) -> int | None:
+    """Average SoC over the main unit plus every external pack reporting now.
+
+    Lives here (not in sensor.py) because this file is the only module with no
+    Home Assistant imports, which is what lets the scale tests in
+    tests/test_battery_average.py exercise 0-through-8-packs arithmetic on a
+    bare interpreter.
+
+    Rules:
+      - main SoC = dpid 3; included whenever present
+      - each external slot contributes dpid 79; slots that are present but
+        silent, or dicts pre-seeded empty by the coordinator, are skipped
+      - a reported 0 SoC counts (empty battery is real data, not absence)
+      - returns None only when literally nothing reported -> entity unknown
+      - unrounded sum/len then round(): with percents this is exact enough,
+        and a flat integer keeps the gauge tidy
+
+    The coordinator rebuilds ext_batteries from scratch every update, so a
+    pack switched off vanishes from the average on the next poll without any
+    extra staleness logic here.
+    """
+    vals: list[int] = []
+    main = attrs.get(3)
+    if isinstance(main, int):
+        vals.append(main)
+    for slot_data in (ext_batteries or {}).values():
+        soc = slot_data.get(79) if slot_data else None
+        if isinstance(soc, int):
+            vals.append(soc)
+    if not vals:
+        return None
+    return round(sum(vals) / len(vals))
