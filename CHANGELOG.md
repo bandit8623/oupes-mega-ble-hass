@@ -8,6 +8,37 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.7 - 2026-10-15
+
+Live speed. On a continuous connection, Home Assistant now hears from the
+station when the *station* speaks, instead of when this integration gets around
+to asking. Field-tested on a live Guardian 6000 V2 against the running 1.4.5
+install on the same box before a single tag moved.
+
+- **Notification-driven pushes replace the 10-second heartbeat.** Every value
+  the station sends over the open BLE link is published to HA within a short
+  throttle window. Measured on the live station: entity updates that arrived
+  every ~8-10 s now land every ~2-3 s - the station's own telemetry cadence,
+  which is the floor no software can beat. Polled (non-continuous) mode is
+  unchanged.
+- **New user option: Live update throttle.** *Settings → Devices & Services →
+  your OUPES entry → Configure (the cog)*, right under Poll interval. Range
+  1-30 s, default 1, per entry. Field measurement: 1 s and 2 s cost the same
+  HA-core CPU to two decimals (~0.25 %), so pick by feel.
+- **Fixed: live pushes could run off the event loop.** The field test caught
+  HA's own frame check warning that state writes were happening on an executor
+  thread - a latent bug the heartbeat design had been living with. The push
+  path now verifies its thread and hops to the event loop, with a one-time
+  WARNING carrying the real caller stack. Zero violations since on the test
+  box.
+- **Fixed: `AttributeError: 'HomeAssistant' object has no attribute
+  'async_call_later'`** in the deferred-push path (it lives in
+  `homeassistant.helpers.event`). Caught during the same field test; it only
+  bit the throttled pushes, which is exactly the kind of thing field tests are
+  for.
+- **README: Tuning section.** Every options-dialog field in one table, with
+  the navigation written the way the UI shows it - including the cog.
+
 ## 1.4.6 - 2026-10-15
 
 One behavioural change, warn-only: a hand-typed user ID that looks like a typed
