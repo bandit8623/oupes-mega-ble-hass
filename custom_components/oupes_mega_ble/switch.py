@@ -64,18 +64,31 @@ SWITCH_DESCRIPTIONS: tuple[OUPESSwitchDescription, ...] = (
 )
 
 # Per-series display names for bit1 (Car/DC output group).
+# Guardian: the case has ONE physical DC button that the BLE bit mirrors, and
+# it feeds the whole DC group (owner-verified 2026-10-15: enabling the bit put
+# 12.5 V on the cigarette socket, off-command decayed it to 0). Named after
+# what the user sees on the unit, not one port of the group.
 _DC_OUTPUT_NAMES: dict[str, str] = {
     "mega_1":   "Car Port",
     "mega":     "Car & 12V Output",
-    "guardian": "Car & 12V Output",
+    "guardian": "DC Output",
 }
 
-# Per-series display names + icons for bit2 (USB / Anderson / XT90 output group).
+# Per-series display names + icons for bit2 (USB / Anderson output group).
+# Guardian is deliberately ABSENT: tested on a Guardian 6000 V2 on 2026-10-15,
+# enable-writes for this bit are ignored by the station (two attempts, state
+# never left off, and the USB ports measured dead with a voltmeter while the
+# write was in flight). The V2's only software-switchable DC output is bit1
+# (cigarette/12V group), verified live: 12.5 V on the socket when enabled,
+# decaying to 0 after the off command. Publishing a switch the firmware
+# ignores teaches people the integration lies, so Guardian gets no bit2 switch.
 _USB_OUTPUT_NAMES: dict[str, tuple[str, str]] = {
     "mega_1":   ("USB Output",           "mdi:usb"),
     "mega":     ("Anderson & USB Output", "mdi:power-plug"),
-    "guardian": ("XT90 Output",           "mdi:ev-plug-chademo"),
 }
+
+# Series whose firmware ignores the USB-group bit entirely (no switch offered).
+_SERIES_WITHOUT_USB_SWITCH = {"guardian"}
 
 
 class OUPESMegaSwitch(CoordinatorEntity[OUPESMegaCoordinator], SwitchEntity):
@@ -283,10 +296,12 @@ async def async_setup_entry(
             return replace(desc, name=name, icon=icon)
         return desc
 
-    # Output switches are always available on all models.
+    # Output switches: AC and the 12V/car group on every model; the USB-group
+    # switch only where the firmware actually honours it (see _USB_OUTPUT_NAMES).
     entities: list[SwitchEntity] = [
         OUPESMegaSwitch(coordinator, _resolve(desc), entry)
         for desc in SWITCH_DESCRIPTIONS
+        if not (desc.key == "usb_output_switch" and series in _SERIES_WITHOUT_USB_SWITCH)
     ]
 
     # Setting switches are filtered by the device's model series.
