@@ -416,7 +416,7 @@ immediately — nothing on the station is touched.
 
 | Field | What it does |
 |---|---|
-| **Live update throttle (seconds)** | Continuous mode only: the shortest gap between two state pushes to Home Assistant. Notifications always arrive when the station sends them (~2–3 s while values change); this only coalesces bursts. Measured on a live station: 1 s and 2 s are indistinguishable in CPU (≈0.25 % of the HA core either way). Range 1–30, default 1. |
+| **Live update throttle (seconds)** | Continuous mode only: the shortest gap between two state pushes to Home Assistant. Notifications always arrive when the station sends them (~2–3 s while values change); this only coalesces bursts. **If you don't want fast updates, raise this to your liking** — e.g. `5` or `10` gives the cards a calmer cadence; nothing else changes, and it can be adjusted any time from the same cog dialog. Measured on a live station: 1 s and 2 s are indistinguishable in CPU (≈0.25 % of the HA core either way). Range 1–30, default 1. |
 | **Poll interval (seconds)** | Non-continuous mode only: how often HA connects, pulls, and disconnects. Range 10–600, default 30. Ignored while continuous mode is up. |
 | **Continuous BLE connection** | Keep the link open and receive the station's notification stream, vs. poll-and-release. Continuous blocks the vendor app from connecting at the same time. |
 | **Stale timeout (minutes)** | How long the last known values keep showing after a failed poll before entities go `unavailable`. Range 1–120, default 15. |
