@@ -347,32 +347,23 @@ So the order of operations is fixed by the hardware, not by preference:
    sequence is written up in
    [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md#when-a-firmware-update-needs-the-app).
 
-**Connected? Before you close the settings, save your user ID.**
-**Cog on the OUPES card → Configure** shows it in the **Cloud userId** field —
-the five-digit user ID that step 6 fetched for you. Write it down somewhere
-permanent: every future re-add of this station needs only those five digits —
-no password, no email, no network. That promise holds as long as you **never
-remove the station from the Cleanergy app**: removal erases the identity the
-station checks the digits against, and only the app can pair it again.
-(An entry built by typing a device key instead shows `0` in that field, because
-nothing ever told Home Assistant the value — the Cleanergy app's **Settings**
-(cog) screen always shows the number. For completeness: the vendor's login
-request returns it as `info.uid`, which is what the cloud fetch reads — details
-in [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).)
+**Connected? Save your user ID - it is all any future re-add needs.**
+Before you close the settings, write the five-digit user ID down somewhere
+permanent. **Cog on the OUPES card → Configure** shows it in the **Cloud userId**
+field - the number step 6 fetched for you - and the Cleanergy app's **Settings**
+(cog) screen always shows it too.
 
-**Second method: re-adding a powered station with your user ID.**
-Once this station has connected through the cloud account as above, every future
-add can be done with the five digits you just saved - no email, no password, no
-internet needed. Power and wake the station, make sure it is still in the
-Cleanergy app on your account with the phone's Bluetooth **off**, open the setup
-form, and when the credentials screen appears choose
-**Use my Cleanergy user ID** - on a recognised Guardian it is already selected -
-and enter the five digits - that is all Home Assistant needs. Then connection
-settings, submit, wait fifteen seconds: identical to steps 7-10 above. The only
-time the email login comes back is after the station was re-paired in the app.
-If the number is lost: the Cleanergy app's **Settings** (cog) screen always shows
-it, as does any entry made through the email login (**cog on the OUPES card →
-Configure → Cloud userId**).
+Re-adding a powered station later is then five digits, no email, no password, no
+internet: power and wake the station, make sure it is still in the Cleanergy app
+on your account with the phone's Bluetooth **off**, open the setup form, and when
+the credentials screen appears choose **Use my Cleanergy user ID** - on a
+recognised Guardian it is already selected - and enter the digits. Connection
+settings, submit, wait fifteen seconds: identical to steps 7-10 above.
+
+That promise holds as long as you **never remove the station from the Cleanergy
+app** - removal erases the identity the station checks the digits against, and
+only the app can pair it again. After such a re-pair, the email login is the way
+back in.
 
 **Do not use "Create a new device key" on a station that is already paired.** That
 path claims the station and overwrites what it holds, and on this firmware family it
