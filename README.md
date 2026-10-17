@@ -143,9 +143,10 @@ less than the cost of a cable run.
    address and password the app uses. That single request fetches the account's numeric user
    ID and Home Assistant derives the binding key from it - there is no key to capture and no
    openid to hunt for. Do **not** start with **Use my Cleanergy user ID** on a first install
-   unless you already know the number: the Cleanergy app does not display it on any screen,
-   so the field has nothing to be filled in from. An existing entry shows the value it
-   fetched under **Configure** (the cog), which is where that field is useful later.
+   unless you already know the number. You can read it in the Cleanergy app under
+   **Settings** (the cog) — a five-digit user ID — but the fetch above gets it
+   without the hunting. An existing entry also shows the value it fetched under
+   **Configure** (the cog), which is where that field is useful later.
 7. Check the entities. Telemetry normally appears within ~20 s. If it does not,
    the station is almost certainly still being held by the phone: force-stop the
    Cleanergy app or switch the phone's Bluetooth off, because the station answers
@@ -252,12 +253,13 @@ advertises the BLE name `WP`. A **Mega** advertises `TT`.
 > | Value | What it is | Where it is used |
 > | --- | --- | --- |
 > | **Email address** | the address you log in to the Cleanergy app with | the **Fetch key from Cleanergy cloud account** screen, with the password. One request; it is not stored and it never reaches the station |
-> | **User ID** | a **numeric** id the vendor stores for that address — five digits on the account measured here | fetched for you by the cloud request above. The binding key is `md5(user ID)` truncated to 10 characters |
+> | **User ID** | a **numeric** id the vendor assigns to your account — five digits, and the Cleanergy app **does** show it, on the **Settings** (cog) screen | typed directly into **Use my Cleanergy user ID**, or fetched for you by the cloud request above. The binding key is `md5(user ID)` truncated to 10 characters |
 >
 > The user ID is a number, **not** your email address. The field says so by refusing anything
 > that is not a number, and that is deliberate: the Bluetooth key is an MD5 over the *number*,
-> so an address would derive a key the station refuses. The app displays the number nowhere,
-> which is exactly why the cloud request exists instead of a "go and read it in the app" step.
+> so an address would derive a key the station refuses. The number is visible in the app
+> under **Settings** (the cog) — read it from there if you would rather not sign in anywhere
+> — or the cloud request above fetches it without you leaving the dialog.
 > After a successful setup, an existing entry shows the value it fetched under **Configure**
 > (the cog on the OUPES card).
 
@@ -313,11 +315,11 @@ So the order of operations is fixed by the hardware, not by preference:
    was flaky in testing (the same removal did not always unbind - see the confidence
    table in [the WP guide](docs/GUARDIAN-WP-BLE.md)), so the safe assumption is that it
    wipes and you would have to pair again.
-4. **Use the same account in Home Assistant that the app paired with.** You will not
-   find that number in the app - it does not display it anywhere, so do not spend the
-   evening hunting for the screen. You normally do not need to know it at all, because
+4. **Use the same account in Home Assistant that the app paired with.** The number to
+   check is your five-digit Cleanergy user ID — the app shows it on the **Settings**
+   (cog) screen. You normally do not need to look it up at all, because
    the cloud login in step 7 reads it for you. If you do want it: an existing entry
-   shows it (**cog on the OUPES card → Configure**, the `Cloud userId` field) - but
+   also shows it (**cog on the OUPES card → Configure**, the `Cloud userId` field) - but
    only if that entry was set up through the email login, because that is the request
    that fetches the number. An entry built by typing a device key by hand shows `0`
    there, since nothing ever told Home Assistant the value. From scratch, a vendor
@@ -341,8 +343,9 @@ So the order of operations is fixed by the hardware, not by preference:
      you use in the app. Home Assistant reads your user ID out of the vendor's own
      login response and derives the key from it. One request, and the password is not
      stored. Take this one if you are unsure.
-   - **Use my Cleanergy user ID** — type the user ID and the key is derived
-     locally. No sign-in, no network request.
+   - **Use my Cleanergy user ID** — type the user ID (the five-digit number on the
+     Cleanergy app's **Settings** screen) and the key is derived locally. No sign-in,
+     no network request.
 
    On a recognised Guardian the second option is already selected for you. Do not pick
    **Create a new device key** here.

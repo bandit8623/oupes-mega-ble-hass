@@ -38,7 +38,7 @@ Two values. That is all.
 | Value | Example | Where it comes from |
 | --- | --- | --- |
 | **Bluetooth address** | `AA:BB:CC:DD:EE:FF` | The station's own MAC. Your proxy's device list, or Home Assistant's discovered-device list. The station advertises as `WP`. |
-| **User ID** | `24680` | Numeric id of the Cleanergy account that paired the station. The app does not show it anywhere - §3 gives two ways that do. |
+| **User ID** | `24680` | Numeric id of the Cleanergy account that paired the station - five digits, shown on the app's **Settings** (cog) screen; §3 lists all the ways to get it. |
 
 The device key is not a third thing to hunt for. It is `md5(user ID)`
 truncated to ten characters, which this integration computes for you (§4). The
@@ -56,9 +56,8 @@ returned by no email-and-password API, and it was never needed.
 
 ## 3. Getting your user ID
 
-**The Cleanergy app does not display this number.** There is no account screen, no
-device page, nothing that shows it - so do not spend an evening hunting for one. Two
-ways that do work:
+**The Cleanergy app shows this number on its Settings (cog) screen** — five digits.
+Three ways to get it, easiest first:
 
 * **From an entry you already have working.** The cog on the OUPES card →
   **Configure**, and read the **Cloud userId** field, which comes pre-filled. It only
@@ -477,6 +476,7 @@ Claim by claim, and where each one stops being safe:
 | Removing the station in the app wipes the pair | Observed directly | One unit. The same unit also failed to unbind reliably in the other direction, which is the same experiment being flaky |
 | Frame layout, `WP_DEVICE_ID`, packed dpid 23 | APK plus wire observation | These are on the wire, so they are the most solid things here |
 | Continuous telemetry uses tag `0x0A`, not the `0x02` that `parse_wp_stream()` expects | Replayed a 2026-10-14 capture through the parsers: `parse_wp_stream()` returned `{}` on every sequence while the sequence reader decoded them fine | Explains why the packing has to be applied on the fallback path too. Records can straddle a packet boundary, so grepping a hex capture finds dpids that are not there |
+| The BLE surface is exhaustive: 3 verbs, 9 settings dpids, nothing for Energy Management | 2026-10-16 sweep: every dpid 1–255 queried, every command byte 0x01–0x1F/0x70/0x71/0xF0 probed, four deliberate charge-limit saves plus a backup save, all re-queried after each | One unit, one firmware. A future build could add dpids; the sweep is cheap to re-run (§13) |
 | The two packed halves are the dual **XT60** PV inputs | Owner of the unit tested here, who can see the case | Reported, not measured. BLE never names a connector, and it does not identify which socket is Input 1 |
 | Entity count (44 with three packs), DC input split, expansion count | Measured on the unit used here; a third pack was added during testing | Your model may report different dpids. The integration degrades to "entity missing" rather than "value wrong", which is the safe direction |
 
@@ -498,3 +498,38 @@ you did takes two minutes and is the only way this table grows past one row. If 
 **not** work, that is worth filing too - a wrong claim in these docs is worse than a
 missing one, and the openId chapter is the proof of that.
 
+
+## 13. Energy Management: what Bluetooth does **not** carry
+
+The Cleanergy app's **Energy Management** screen — Upper Charge Limit, Lower Discharge
+Limit, and the Energy Backup toggle with its 5–100 % slider — writes to a place this
+station will not read out over Bluetooth. Measured on a Guardian 6000 V2 (`95haDY`) on
+2026-10-16; every experiment below was a deliberate, deliberate-value save followed by
+a fresh full re-query of the station:
+
+| Experiment | Result |
+| --- | --- |
+| Save Upper Charge Limit (85 %, then 50 %, then 90 %, then 70 %) with HA connected over BLE | no attribute changed anywhere in the telemetry stream; no push notification packet of any kind |
+| Save Lower Discharge Limit (0 → 20 %) | settings fragment unchanged; `dpid 46`, the one value whose `0` matched the screen, stayed `0` |
+| Energy Backup toggle ON + slider to 30 % | no settings answer, no telemetry change |
+| Save written while the **phone** was BLE-only (airplane mode, Bluetooth on) | no attribute visible afterwards |
+| Query **every dpid 1–159** (the vendor app's own batched Cmd2, seven per packet) | the station answers exactly nine dpids — 41, 45, 46, 47, 48, 49, 58, 63, 105 — and nothing else |
+| Query dpid 160–255 | silence |
+| Send query-shaped frames under every other command byte (0x01–0x1F, 0x70, 0x71, 0xF0) | silence. Only 0x02 (settings) and 0x03 (keepalive/set) ever answer |
+
+Read as a whole: the BLE protocol surface of this firmware is **three verbs** — auth,
+read settings, write settings (nine dpids) — plus a continuous telemetry stream of
+about 34 attributes. The energy policy lives in the vendor cloud's device profile (or
+a station-side store no BLE query addresses), and the enforcement the station performs
+(Scheduled Tasks running while the phone and internet are both away) does not make it
+reportable.
+
+**Consequences, stated plainly:**
+
+* A Home Assistant `number` entity for the charge limit is **not achievable over BLE**
+  with the protocol as measured. Do not spend a weekend on it; this weekend is done.
+* Scheduled Tasks (and presumably the same energy policy) are enforced **on the
+  station**, offline — but they are likewise invisible over BLE, so HA can show *what
+  the battery is doing* but never *what it has been told to do*.
+* Do not write a switch or number that pretends to control these. A control that lies
+  is worse than a missing control.

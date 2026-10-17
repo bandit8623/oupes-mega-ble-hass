@@ -80,16 +80,16 @@ def first_install_identity_route_problem(section: str) -> str | None:
         )
 
     if not mentions_uid:
-        return None  # not mentioning the dead end at all is fine
+        return None  # not mentioning the field at all is fine
 
-    # If the user ID option IS mentioned, say why it is not the starting point.
+    # If the user ID option IS mentioned, tell the reader where the number comes from.
     for match in re.finditer(r"cleanergy user id", section, re.I):
         window = section[max(0, match.start() - CAVEAT_WINDOW): match.end() + CAVEAT_WINDOW]
-        if not re.search(r"does not display|not displayed|nowhere|never display", window, re.I):
+        if not re.search(r"settings|cog|fetch", window, re.I):
             return (
                 "the Installation section points at the user ID field without saying, within "
-                "%d characters, that the Cleanergy app does not display that number. A first "
-                "time reader will go looking for a screen that does not exist." % CAVEAT_WINDOW
+                "%d characters, where the number can be found (the app's Settings/cog screen) "
+                "or that the cloud fetch obtains it for you." % CAVEAT_WINDOW
             )
     return None
 
@@ -205,18 +205,18 @@ def test_checker_fails_when_only_a_proxy_is_offered():
 def test_checker_fails_when_the_user_id_field_is_named_without_the_caveat():
     section = (
         "You need a Bluetooth adapter or an ESPHome Bluetooth proxy (ESP32).\n"
-        "Pick **Fetch key from Cleanergy cloud account**, or choose **Use my Cleanergy user "
-        "ID** and enter the number from the app.\n"
+        "Start with **Cleanergy cloud sign-in**; it works without knowing anything else.\n"
+        "Or choose **Use my Cleanergy user ID** and enter the number from your account.\n"
     )
     problem = first_install_identity_route_problem(section)
-    assert problem and "does not display that number" in problem, problem
+    assert problem and "Settings" in problem, problem
 
 
 def test_checker_passes_the_caveat_version_of_the_same_sentence():
     section = (
         "You need a Bluetooth adapter or an ESPHome Bluetooth proxy (ESP32).\n"
-        "Pick **Fetch Key from Cleanergy Cloud**. Do not start with **Your Cleanergy User "
-        "ID**: the Cleanergy app does not display that number on any screen.\n"
+        "Pick **Fetch Key from Cleanergy Cloud**, or **Your Cleanergy User ID** - the "
+        "five-digit number shown on the Cleanergy app's **Settings** (cog) screen.\n"
     )
     assert first_install_identity_route_problem(section) is None
 
