@@ -266,87 +266,22 @@ while HA pairs and stays connected. Typing your email into the user ID field doe
 not break anything - the field refuses it, and that refusal is the field telling
 you it wants the number.
 
-Everything below explains *why* it works that way. You do not need it to succeed.
+**Two values, one job each.** The **user ID** is a number — five digits, shown
+on the **Settings** (cog) screen of the Cleanergy app — and it is **not your email
+address**; the field that asks for it refuses an email because it wants the number.
+The **email address** is only what you *log in* to the Cleanergy app with, and it is
+all the fetch screen needed earlier. The station authenticates Bluetooth against the
+account that paired it; with the wrong account it answers once, then drops Bluetooth
+about four seconds later — which looks exactly like a range problem, and is not one.
 
-> **The email address is not the user ID.** Two different account values appear in these
-> pages, and conflating them is the most common way to get stuck:
->
-> | Value | What it is | Where it is used |
-> | --- | --- | --- |
-> | **Email address** | the address you log in to the Cleanergy app with | the **Fetch key from Cleanergy cloud account** screen, with the password. One request; it is not stored and it never reaches the station |
-> | **User ID** | a **numeric** id the vendor assigns to your account — five digits on every account measured (the field accepts any length, so a newer account may carry more), shown on the Cleanergy app's **Settings** (cog) screen | typed into **Use my Cleanergy user ID**, or fetched for you by the cloud request above. From it the integration derives the station's **device key** — a *different*, ten-character value: `md5(user ID)` truncated to 10 hex characters |
->
-> Two values, don't let the arithmetic blur them: the **user ID is five digits**
-> (you can see it on the app's Settings screen), and only the **derived device key
-> is ten hex characters** (you never type it unless you chose the manual route).
-> `22898` is a user ID; its key is ten characters *because it is the hash*, not
-> because the ID grew. And all of this is the **`WP`/Guardian family only** — a
-> Mega (BLE name `TT`) never sees a user ID: its legacy AUTH frame carries only
-> the 10-character key, and no user ID is typed, fetched, or transmitted
-> for it.
->
-> The user ID is a number, **not** your email address. The field says so by refusing anything
-> that is not a number, and that is deliberate: the Bluetooth key is an MD5 over the *number*,
-> so an address would derive a key the station refuses. The number is visible in the app
-> under **Settings** (the cog) — read it from there if you would rather not sign in anywhere
-> — or the cloud request above fetches it without you leaving the dialog.
-> After a successful setup, an existing entry shows the value it fetched under **Configure**
-> (the cog on the OUPES card).
+A second Guardian 6000 V2 was set up from scratch by a different user with nothing
+but the app's email and password at the fetch screen: paired on the first attempt.
 
-The cloud-account path was verified on a second Guardian 6000 V2 installed from
-scratch by a different user: Bluetooth transport, and at the **Fetch key from
-Cleanergy cloud account** screen they entered the *same credentials they use to log
-into the official OUPES/Cleanergy app* - the account the app had already bound the
-station to. Paired on the first attempt.
-
-These stations put the owner's account identity *inside* the Bluetooth
-authentication frame. Without it the station answers the AUTH packet and then drops
-Bluetooth about four seconds later, which looks exactly like a range problem.
-
-**The device key is not a secret the vendor holds.** The Cleanergy app generates it
-with `md5(userId)` truncated to ten characters:
-
-```bash
-python -c "import hashlib; print(hashlib.md5(b'24680').hexdigest()[:10])"
-# -> 9256f177e0
-```
-
-So the whole credential is the user ID, and this integration derives the key
-from it for you. It is the number the vendor's own app hashes, which is why the
-station accepts it.
-
-**What that means in practice - one email sign-in, then five digits forever:**
-
-1. **First pairing: use the email route** (**Fetch key from Cleanergy cloud
-   account**). It looks the five-digit user ID up and saves it into the entry.
-2. **Note it down while you are there.** The entry shows it for the rest of its
-   life: cog on the OUPES card → **Configure** → the `Cloud userId` field. (The
-   same number is on the Cleanergy app's **Settings** screen.)
-3. **Every re-add after that needs only the five digits** - choose **Use my
-   Cleanergy user ID**, type them, and the key is derived locally. No password,
-   no network request, works with the internet switched off.
-
-The one thing that breaks step 3: **removing the station in the Cleanergy app.**
-The station overwrites its stored `(user ID, key)` pair when the app removes it,
-so the pairing Home Assistant authenticates against dies with it - five correct
-digits then get refused, because the station is no longer holding that identity.
-Never remove the device from the app; if it was already removed, pair it in the
-app again and re-add the entry.
-
-**The `openId` is not required, and never was.** Measured on a Guardian 6000 V2: the
-station accepted its real key and real user ID with the openId field
-zero-filled and streamed 43 telemetry frames, and refused the same frame with the
-user ID changed. Earlier revisions of this README told people the openId was
-the awkward half of the credential, unobtainable without WeChat or a Bluetooth
-capture. It was carried forward from an old pairing into every later experiment in
-the same frame as the two values that do get checked, so nothing had ever isolated
-it. It is decoration.
-
-**The identity has to be written by the app first, and that is the device's doing,
-not this integration's.** The station stores the `(user ID, key)` pair the
-app wrote and checks both halves: an invented user ID carrying its own
-correct `md5` is refused, which rules out the station merely recomputing the hash.
-So a station that has never been in the app cannot be set up from here.
+For the curious rather than the stuck — why the user ID alone is enough, why the
+`openId` people once believed required turned out to be decoration, and why a station
+the app has never paired cannot be set up from Home Assistant at all — is written
+up in [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md). Pairing does not need any
+of it.
 
 So the order of operations is fixed by the hardware, not by preference:
 
@@ -427,12 +362,6 @@ never bound it.
 
 Would rather not hand this integration your password? The user ID path needs
 none. It is one number, and the key follows from it.
-
-If the station is brand new and you would rather never install the app: you cannot.
-Let it bind once, let Home Assistant take the pairing over, and the app can go away
-afterwards - though leave it installed and closed rather than removing the device from
-it, because removal wiped the pairing on the unit tested here and there is no cheap way
-to get it back.
 
 ### Mega (`TT`) — no identity needed
 

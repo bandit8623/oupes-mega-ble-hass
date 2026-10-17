@@ -158,6 +158,10 @@ Cleanergy cloud account** and sign in, which looks the number up for you. Either
 the key is derived from the number, and nothing is written to the station: the app
 already left the matching pair there.
 
+This is not a one-unit result: a **second Guardian 6000 V2**, installed from scratch
+by a **different user**, entered nothing but the app's email and password at the
+cloud screen - paired on the first attempt.
+
 The other options on that screen, honestly described:
 
 * **Fetch key from Cleanergy cloud account** — same result, fewer things to look up.
