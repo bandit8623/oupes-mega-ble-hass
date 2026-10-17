@@ -298,13 +298,10 @@ So the order of operations is fixed by the hardware, not by preference:
    was flaky in testing (the same removal did not always unbind - see the confidence
    table in [the WP guide](docs/GUARDIAN-WP-BLE.md)), so the safe assumption is that it
    wipes and you would have to pair again.
-4. **Use the same account in Home Assistant that the app paired with.** Nothing to
-   look up beforehand: the cloud login in step 7 reads the account's five-digit
-   user ID for you.
-5. **Switch the phone's Bluetooth off** — or force-close the app. One Bluetooth
+4. **Switch the phone's Bluetooth off** — or force-close the app. One Bluetooth
    client at a time, and an app still holding the station produces a pairing
    failure that looks like a broken integration.
-6. Bring up the setup form. There are two ways in, and they meet at the same screen:
+5. Bring up the setup form. There are two ways in, and they meet at the same screen:
    - **If something nearby can hear Bluetooth**, the station turns up under
      **Discovered** on **Settings → Devices & Services**. Click **Add**, then **Submit**
      on the "Found *name* (address) nearby" confirmation. A station that has never been
@@ -314,28 +311,30 @@ So the order of operations is fixed by the hardware, not by preference:
      into **Bluetooth MAC Address**. The station advertises as `WP`; your proxy's device
      list gives you the address. A nearby station is pre-filled into that field when an
      adapter saw it.
-7. On **How would you like to provide the device key?**, choose one of:
-   - **Fetch key from Cleanergy cloud account** — sign in with the email and password
-     you use in the app. Home Assistant reads your user ID out of the vendor's own
-     login response and derives the key from it. One request, and the password is not
-     stored. Take this one if you are unsure.
+6. On **How would you like to provide the device key?**, choose one of:
+   - **Fetch key from Cleanergy cloud account** — sign in with the **same email
+     and password you use in the Cleanergy app**: Home Assistant must use the very
+     account the station was paired with, and this reads its five-digit user ID
+     straight out of the login response and derives the key from it. One request,
+     and the password is not stored. Take this one if you are unsure - there is
+     nothing to look up beforehand.
    - **Use my Cleanergy user ID** — type the user ID (the five-digit number on the
      Cleanergy app's **Settings** screen) and the key is derived locally. No sign-in,
      no network request.
 
    On a recognised Guardian the second option is already selected for you. Do not pick
    **Create a new device key** here.
-8. Fill in **Connection settings** and submit. Neither path writes anything to the
+7. Fill in **Connection settings** and submit. Neither path writes anything to the
    station; it simply turns up with the credentials the app already left there.
-9. **Wait about fifteen seconds.** Roughly 44 entities appear. The two DC input
+8. **Wait about fifteen seconds.** Roughly 44 entities appear. The two DC input
    sensors read *unknown* while nothing is plugged in, and that is correct. If they
    stay *unavailable*, the phone is almost certainly still holding the station or it has gone
    back to sleep - both are fixed outside Home Assistant, not in it.
-10. Understand what that costs: **Home Assistant now holds the station's single
+9. Understand what that costs: **Home Assistant now holds the station's single
    Bluetooth connection**, so Cleanergy stops reporting it while the entry is loaded.
    Its cloud figures keep updating, but live control from the app does not work. That
    is the arrangement, not a malfunction.
-11. When you want the app back - to change a setting, or to take an over-the-air
+10. When you want the app back - to change a setting, or to take an over-the-air
    firmware update, which only the app can do - **disable the entry, do not delete it**.
    Disabling releases the Bluetooth connection, keeps the entry and its entities, and
    reconnects on its own when you switch it back on **provided the app has let go of the
@@ -349,7 +348,7 @@ So the order of operations is fixed by the hardware, not by preference:
 
 **Connected? Before you close the settings, save your user ID.**
 **Cog on the OUPES card → Configure** shows it in the **Cloud userId** field —
-the five-digit user ID that step 7 fetched for you. Write it down somewhere
+the five-digit user ID that step 6 fetched for you. Write it down somewhere
 permanent: every future re-add of this station needs only those five digits —
 no password, no email, no network. That promise holds as long as you **never
 remove the station from the Cleanergy app**: removal erases the identity the
