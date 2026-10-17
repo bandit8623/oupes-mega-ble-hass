@@ -391,7 +391,10 @@ Bluetooth, update, then re-enable.
 
 Verified 2026-10-17 on Guardian 6000 V2 (`95haDY`): thirty minutes of dead Bluetooth
 after an app update; a brief IoT-button press with the phone's Bluetooth off restored
-the stream in under sixty seconds, same key, no re-pairing.
+the stream in under sixty seconds, same key, no re-pairing. A controlled re-test the
+same afternoon - updated app open on Wi-Fi only, integration re-enabled over the top
+of it - reconnected on the first try, so this is a one-off radio fault, not normal
+app behavior. Do not blame the app; just know the cure.
 
 ---
 
