@@ -289,9 +289,17 @@ So the order of operations is fixed by the hardware, not by preference:
    has been sitting idle goes to sleep, and it will not answer a handshake in its
    sleep - which is indistinguishable from being out of range. Press the IoT button
    once immediately before you start.
+   **If the station is not connected to Cleanergy at all** - brand new, or reset -
+   it must meet the app before Home Assistant can do anything: hold the IoT button
+   to reset it if needed, then do step 2 now; it is not optional for this case. One
+   caution from our own instrumentation: this button is inconsistent across units
+   and firmwares (one long press produced a slow blink, another combination turned
+   the station *off*), and a reset Guardian still refuses Home Assistant until the
+   app has paired it once - the app, not the button, is what makes a station pairable
+   here.
 2. **Add it in the Cleanergy app first**, by Bluetooth with the phone next to the
-   unit. That is what writes the pair into the station. Skip if it is already in the
-   app.
+   unit. That is what writes the pair into the station. Skip only if it is already
+   in the app on *your* account.
 3. **Do not remove it from the app afterwards.** Closing the app is enough to free
    the radio. Removing the station also wiped the pairing Home Assistant authenticates
    with on the unit tested here, and re-adding rewrote it. The vendor's unbind behaviour

@@ -320,6 +320,10 @@ To get a station into the state where an outside claim can succeed you need it
 * The button combination on the side of the unit is not documented for this model and
   behaves inconsistently: on the unit used here, a long press produced a slow blink
   and the combination that produced a fast blink turned the station **off** instead.
+  Operators report that holding the IoT button resets an unconnected station, so the
+  long press is the lead worth chasing - but it was never reproduced reliably here,
+  and no reset recipe is claimed in the README beyond "try the long press, then let
+  the app be the judge".
 * A factory-reset station still refuses identities it did not get from the vendor, so
   "reset and claim with a key I invented" is not a working path. What it checks is
   the pair: it accepts the user ID and key the app wrote, and refuses an
