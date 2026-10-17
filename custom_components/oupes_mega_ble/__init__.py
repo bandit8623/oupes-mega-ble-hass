@@ -9,6 +9,11 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryNotReady
 
+try:  # HA >= 2024.4 exposes the stop signal as a bus event
+    from homeassistant.core import BUS_EVENT_HOME_ASSISTANT_STOP as _STOP_EVENT
+except ImportError:  # older cores only have the legacy constant
+    from homeassistant.const import EVENT_HOMEASSISTANT_STOP as _STOP_EVENT
+
 from .const import (
     ATTR78_RUNTIME_MAX,
     CONF_ADDRESS,
@@ -107,6 +112,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ) from exc
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = coordinator
+
+    # Release the BLE link at the *first* moment HA begins shutting down.
+    # Waiting for async_unload_entry is too late when the supervisor's stop
+    # grace expires before unload reaches us (docker restart = ~10 s fuse):
+    # the proxy keeps a zombie GATT link and refuses every later connection
+    # (HCI "Conn Exists") until it is power-cycled. async_shutdown is
+    # idempotent, so the normal unload path below stays harmless.
+    def _release_ble(_event) -> None:
+        hass.async_create_task(coordinator.async_shutdown())
+
+    entry.async_on_unload(
+        hass.bus.async_listen_once(_STOP_EVENT, _release_ble)
+    )
 
     if continuous:
         coordinator.start_continuous_connection()

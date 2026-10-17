@@ -674,11 +674,18 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
     async def async_shutdown(self) -> None:
         """Stop polling AND release the held BLE connection.
 
+        Idempotent: called early on the HA-stop bus event *and* again from
+        async_unload_entry; the second call must not re-disconnect a fresh
+        client an in-flight reload may already have opened.
+
         The base class cancels the update task; it knows nothing about the
         long-lived client the continuous task keeps open. Without this, every
         config-entry reload or HA restart strands one GATT connection on the
         BLE proxy, and two or three of those wedge the proxy for everything.
         """
+        if getattr(self, "_shutdown_started", False):
+            return
+        self._shutdown_started = True
         self.stop_continuous_connection()
         client, self._active_client = self._active_client, None
         if client is not None:

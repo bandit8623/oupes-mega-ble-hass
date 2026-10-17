@@ -362,7 +362,7 @@ The integration's options also offer **Log raw frames** and **Log attributes**, 
 append to CSV files under the config directory. Reach for `raw` last: that file
 contains the AUTH frame, so it holds your user ID in the clear.
 
-### The Bluetooth side wedged after an app update
+### The Bluetooth side wedged — look at the light
 
 One more cause earns its own heading because the symptoms mislead: a Cleanergy app
 update can wedge the station's Bluetooth while its Wi-Fi keeps working. The app shows
@@ -370,7 +370,24 @@ the station online, cloud figures keep moving, Home Assistant's entities sit fro
 and its log repeats `Continuous BLE error`. The phone is not the culprit - this is
 the station's own radio state.
 
-The fix is to restart the station's wireless module with the lane clear:
+The fix depends on *which side* is stuck, and the station's own Bluetooth
+icon tells you in two seconds - check it while Home Assistant is failing to
+connect:
+
+- **Blinking** - the station's radio is alive and advertising; it is offering
+  itself freely and the fault is on the path. The usual culprit is a Bluetooth
+  proxy whose controller is holding a stale link from a previous session (the
+  log fingerprint is GATT errors within milliseconds, and on ESP-IDF proxies
+  an `HCI ... Conn Exists` warning). Power-cycle the proxy - unplug and
+  replug, or reboot it - and the first connection afterwards normally succeeds.
+  This class is usually *caused* by restarts: stopping Home Assistant abruptly
+  while it holds the station's connection leaves the link dangling on the
+  proxy. From integration 1.4.11 onward the release happens at the very start
+  of shutdown, so ordinary restarts stop being able to cause it; disabling the
+  entry before a planned restart also prevents it.
+- **Solid** (with no phone nearby and Home Assistant shut out) - the station
+  itself is guarding a phantom session. Restart its wireless module with the
+  lane clear:
 
 1. Force-close the Cleanergy app, or switch off Bluetooth on every phone that has it.
    The station re-advertises when its radio comes back, and an awake app will grab
@@ -389,12 +406,16 @@ responds "already up to date" having done nothing. The update is real; the chann
 was busy. To actually apply it: disable the HA entry, let the app connect over
 Bluetooth, update, then re-enable.
 
-Verified 2026-10-17 on Guardian 6000 V2 (`95haDY`): thirty minutes of dead Bluetooth
-after an app update; a brief IoT-button press with the phone's Bluetooth off restored
-the stream in under sixty seconds, same key, no re-pairing. A controlled re-test the
-same afternoon - updated app open on Wi-Fi only, integration re-enabled over the top
-of it - reconnected on the first try, so this is a one-off radio fault, not normal
-app behavior. Do not blame the app; just know the cure.
+Verified 2026-10-17 on Guardian 6000 V2 (`95haDY`): two distinct wedges the
+same day. Morning: icon solid, station-side phantom session after a Cleanergy
+app update; a brief IoT-button press with the phone's Bluetooth off restored
+the stream in under sixty seconds, same key, no re-pairing. A controlled
+re-test that afternoon - updated app open on Wi-Fi only, integration re-enabled
+over the top of it - reconnected on the first try, so the wedge was not normal
+app behavior. Afternoon: icon blinking, station healthy; the proxy's controller
+had accumulated a zombie link over 43 hours of uptime (`HCI Conn Exists`) and
+an unplug/replug of the proxy healed it instantly. Do not blame the app and do
+not guess at the station: look at the light first.
 
 ---
 

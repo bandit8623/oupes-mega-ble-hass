@@ -393,17 +393,20 @@ and either fetch the values from your cloud account or enter them.
 
 ---
 
-### If telemetry stopped after a Cleanergy app update
+### If telemetry stopped and nothing else changed
 
-The station shows online in the app but Home Assistant's values freeze - the app
-update can wedge the station's Bluetooth while its Wi-Fi stays up. Force-close the
-app **or turn off phone Bluetooth** (the station re-advertises during recovery and an
-awake app will steal the slot), then briefly press the station's **IoT button** -
-off, wait ten seconds, on. **Briefly**: a long press is the factory-reset gesture.
-Home Assistant reconnects within a minute, and the pairing survives. If you took an
-app or firmware update in the process, remember the app needs the station's Bluetooth
-for the install itself - an update attempted while Home Assistant is connected
-reports "already up to date" and changes nothing.
+The station shows online in the app but Home Assistant's values freeze.
+**Look at the station's Bluetooth icon while HA is failing:** *blinking* means
+the station is fine and the Bluetooth proxy is stuck - unplug and replug the
+proxy. *Solid* means the station is guarding a phantom session - force-close
+the app **or turn off phone Bluetooth** (the station re-advertises during
+recovery and an awake app will steal the slot), then briefly press the
+station's **IoT button** - off, wait ten seconds, on. **Briefly**: a long
+press is the factory-reset gesture. Home Assistant reconnects within a minute
+either way, and the pairing survives. If you took an app or firmware update in
+the process, remember the app needs the station's Bluetooth for the install
+itself - an update attempted while Home Assistant is connected reports
+"already up to date" and changes nothing.
 
 ---
 

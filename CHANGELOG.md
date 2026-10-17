@@ -8,6 +8,20 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.11 - 2026-10-17
+
+### Fixed
+
+- **The integration now says goodbye to the station before Home Assistant
+  dies.** BLE is released at the very first moment HA begins shutting down
+  (the stop bus event), instead of whenever the config-entry unload queue
+  reaches us. On hosts with a short stop grace (the ~10 seconds a `docker
+  restart` gives), the old timing could be outrun by the kill signal - the
+  ESP32 Bluetooth proxy then kept a zombie GATT link, answered nothing, and
+  every later connection failed with GATT errors until the proxy was power-
+  cycled. Field-confirmed twice on 2026-10-17; the fix makes the restart
+  race unreachable regardless of host grace settings.
+
 ## 1.4.10 - 2026-10-17
 
 ### Fixed
