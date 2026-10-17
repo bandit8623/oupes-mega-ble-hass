@@ -256,10 +256,12 @@ dependency. This replicates the Cleanergy app's pairing protocol.
 On a **Guardian / D5 V2 (`WP`)** station you should not need this screen at all —
 the **Use my Cleanergy user ID** option derives everything from your user ID.
 
-Do **not** type your user ID here: this field expects an already-captured device
-key, not the five-digit number, and the form refuses the number. The only reason
-to be on this screen is that you already hold a real key — for example from a
-Bluetooth log.
+This is the **device key** field - it is not where the user ID goes. Your
+five-digit user ID belongs only in the **Use my Cleanergy user ID** option, never
+here. You would own a device key only if you had extracted one from a Bluetooth
+log; almost no owner has, and on a `WP` station this screen exists for you to
+ignore. If you are reading it during a normal setup, go back and pick the user ID
+option instead.
 
 What is left for this screen: older stations whose key came from the pairing procedure, or
 a key you recovered from your own capture. See
