@@ -257,10 +257,14 @@ advertises the BLE name `WP`. A **Mega** advertises `TT`.
    that says so. The Cleanergy app shows it under **Settings** (the cog), and the
    integration's **Configure** screen shows it too.
 
-Two things that break pairing, both avoidable: typing your **email where the
-five-digit user ID goes**, and **removing the station from the Cleanergy app**
-after pairing — that erases what the app wrote into the station, and nothing can
-pair it except the app again.
+Two things that genuinely break pairing, both avoidable: **removing the station
+from the Cleanergy app** after pairing — that erases what the app wrote into the
+station, and nothing can pair it except the app again — and **leaving the phone's
+Bluetooth on** while Home Assistant tries to connect: the station serves exactly
+one Bluetooth client, so turn off the phone's Bluetooth (or force-stop the app)
+while HA pairs and stays connected. Typing your email into the user ID field does
+not break anything - the field refuses it, and that refusal is the field telling
+you it wants the number.
 
 Everything below explains *why* it works that way. You do not need it to succeed.
 
