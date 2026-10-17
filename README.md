@@ -319,19 +319,14 @@ So the order of operations is fixed by the hardware, not by preference:
      into **Bluetooth MAC Address**. The station advertises as `WP`; your proxy's device
      list gives you the address. A nearby station is pre-filled into that field when an
      adapter saw it.
-6. On **How would you like to provide the device key?**, choose one of:
-   - **Fetch key from Cleanergy cloud account** — sign in with the **same email
-     and password you use in the Cleanergy app**: Home Assistant must use the very
-     account the station was paired with, and this reads its five-digit user ID
-     straight out of the login response and derives the key from it. One request,
-     and the password is not stored. Take this one if you are unsure - there is
-     nothing to look up beforehand.
-   - **Use my Cleanergy user ID** — type the user ID (the five-digit number on the
-     Cleanergy app's **Settings** screen) and the key is derived locally. No sign-in,
-     no network request.
-
-   On a recognised Guardian the second option is already selected for you. Do not pick
-   **Create a new device key** here.
+6. On **How would you like to provide the device key?**, choose
+   **Fetch key from Cleanergy cloud account** and sign in with the **same email
+   and password you use in the Cleanergy app** - Home Assistant must use the very
+   account the station was paired with. Your five-digit user ID is read straight
+   out of the login response and the key is derived from it: one request, the
+   password is not stored, and there was nothing to look up beforehand.
+   (Already have the five digits from a previous setup? There is a shorter route -
+   see [Using your Cleanergy user ID](#using-your-cleanergy-user-id) below.)
 7. Fill in **Connection settings** and submit. Neither path writes anything to the
    station; it simply turns up with the credentials the app already left there.
 8. **Wait about fifteen seconds.** Roughly 44 entities appear. The two DC input
@@ -367,14 +362,30 @@ nothing ever told Home Assistant the value — the Cleanergy app's **Settings**
 request returns it as `info.uid`, which is what the cloud fetch reads — details
 in [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).)
 
+#### Using your Cleanergy user ID
+
+This is the route for **re-adds**. The email login above is genuinely needed once -
+the first time you pair this station, or again after it has been re-paired in the
+app. Once you hold the five-digit user ID, no password is ever required again.
+
+Run steps 1-5 exactly as above, then at **How would you like to provide the device
+key?** choose **Use my Cleanergy user ID** and **enter the number** - digits only.
+The key is derived on the spot: no sign-in, no network request, works with the
+internet switched off. On a recognised Guardian this option is already selected for
+you. It is also the answer for anyone who would rather not hand this integration a
+password at all - the one value it receives here is the number.
+
+Where the number comes from, in order of convenience: the note you made after your
+first pairing (see above), any existing entry's **Configure → Cloud userId**, or
+the Cleanergy app's **Settings** (cog) screen - it is always there.
+
+Do **not** pick **Create a new device key** - see the warning directly below.
+
 **Do not use "Create a new device key" on a station that is already paired.** That
 path claims the station and overwrites what it holds, and on this firmware family it
 does not complete at all - measured twice, once immediately after a factory reset.
 Claiming works on the older `TT` stations, and on a `WP` unit only if the vendor has
 never bound it.
-
-Would rather not hand this integration your password? The user ID path needs
-none. It is one number, and the key follows from it.
 
 ### Mega (`TT`) — no identity needed
 
