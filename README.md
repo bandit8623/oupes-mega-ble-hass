@@ -285,6 +285,24 @@ So the whole credential is the user ID, and this integration derives the key
 from it for you. It is the number the vendor's own app hashes, which is why the
 station accepts it.
 
+**What that means in practice - one email sign-in, then five digits forever:**
+
+1. **First pairing: use the email route** (**Fetch key from Cleanergy cloud
+   account**). It looks the five-digit user ID up and saves it into the entry.
+2. **Note it down while you are there.** The entry shows it for the rest of its
+   life: cog on the OUPES card → **Configure** → the `Cloud userId` field. (The
+   same number is on the Cleanergy app's **Settings** screen.)
+3. **Every re-add after that needs only the five digits** - choose **Use my
+   Cleanergy user ID**, type them, and the key is derived locally. No password,
+   no network request, works with the internet switched off.
+
+The one thing that breaks step 3: **removing the station in the Cleanergy app.**
+The station overwrites its stored `(user ID, key)` pair when the app removes it,
+so the pairing Home Assistant authenticates against dies with it - five correct
+digits then get refused, because the station is no longer holding that identity.
+Never remove the device from the app; if it was already removed, pair it in the
+app again and re-add the entry.
+
 **The `openId` is not required, and never was.** Measured on a Guardian 6000 V2: the
 station accepted its real key and real user ID with the openId field
 zero-filled and streamed 43 telemetry frames, and refused the same frame with the

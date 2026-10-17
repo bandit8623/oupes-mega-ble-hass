@@ -87,6 +87,15 @@ You normally never need to make this call. Home Assistant's **Use my Cleanergy
 user ID** option asks for the number directly, and **Fetch key from Cleanergy
 cloud account** (§5) logs in and reads it for you.
 
+**The intended loop: sign in by email once, live on five digits afterwards.**
+The first cloud pairing fetches the number and keeps it in the entry, where
+**Configure** displays it for the entry's whole life. Any later re-add - new
+server, re-pair, re-configure - needs only those five digits in **Use my
+Cleanergy user ID**, with no password and no network. The single way to break
+that loop is **removing the station in the Cleanergy app**: the station stops
+holding the `(user ID, key)` pair at that moment, and five perfect digits get
+refused until the app pairs it again. Never unbind from the app on purpose.
+
 ### Why there used to be a second value here
 
 Earlier revisions of this guide told you to find an `openId` as well, and warned
