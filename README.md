@@ -444,12 +444,22 @@ immediately — nothing on the station is touched.
 
 ## Supported Models
 
-| Series | Models |
-|--------|--------|
-| **Mega** | Mega 1, Mega 2, Mega 3, Mega 5 |
-| **Exodus** | Exodus 1200, Exodus 1500, Exodus 2400, S024 Lite, S1 Lite |
-| **Guardian** | **Guardian 6000 V2** ← maintained & tested here, Guardian 6000, HP2500, D5 V2 |
-| **Other** | S2 V2, DC 800, LP350, LP700, PB300, UPS 1200, UPS 1800 |
+| Series | Models | Evidence |
+|--------|--------|----------|
+| **Mega** | Mega 1, Mega 2, Mega 3, Mega 5 | measured upstream (`TT` family, long-stable) |
+| **Exodus** | Exodus 1200, Exodus 1500, Exodus 2400, S024 Lite, S1 Lite | product-ID mapping only — no capture by anyone here |
+| **Guardian** | **Guardian 6000 V2** ← maintained & tested here | **measured here, exhaustively** — full wire capture, command sweep, auth matrix |
+| | Guardian 6000 (V1), HP2500, D5 V2, D5 6000 Plus | `guardian`-series mapping only — **never captured**; V1 has a [field-test checklist](docs/FIELD-TEST-ORIGINAL-GUARDIAN.md) |
+| **Other** | S2 V2, DC 800, LP350, LP700, PB300, UPS 1200, UPS 1800 | product-ID mapping only — no capture by anyone here |
+
+**Read the Evidence column, not the Series column.** "Mapping" means the vendor
+cloud reports that product ID and it is routed to a series' code path — it is a
+prediction, not a result. The Guardian / `WP` family's actual BLE behaviour — the
+`md5(userId)[:10]` derivation, the auth sequence, the packed-telemetry quirks that
+make `parse_wp_stream()` miss everything — was established by **this fork's**
+measurements on a Guardian 6000 V2; before it, no public implementation paired one.
+If your station carries an untested product ID and this integration works (or
+doesn't), that is a data point nobody has — see the compatibility note below.
 
 Model-specific features (settings, entity names) are applied automatically
 based on the BLE product ID.
