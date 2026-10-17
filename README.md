@@ -468,6 +468,10 @@ based on the BLE product ID.
 > builds are untested, not known-bad. See
 > [how much is actually known](docs/GUARDIAN-WP-BLE.md#12-how-much-of-this-is-actually-known)
 > and, if your station is not that one, please file the compatibility report.
+> Owners of the **original Guardian 6000** (`oB6OKs`, one Anderson DC input): a
+> ten-minute checklist exists at
+> [FIELD-TEST-ORIGINAL-GUARDIAN.md](docs/FIELD-TEST-ORIGINAL-GUARDIAN.md) — it
+> settles the three dpid questions that machine still has.
 
 ---
 

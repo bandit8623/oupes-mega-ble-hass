@@ -8,6 +8,32 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.10 - 2026-10-17
+
+### Fixed
+
+- **Mega installs no longer get two phantom voltage entities.** The DC input
+  voltage sensors added in 1.4.9 keyed themselves to synthetic data keys
+  (11501/11502) that only the Guardian/WP packed-power split can produce, but
+  the sensors were not gated to that family - every Mega install created them
+  and every Mega install watched them sit `unknown` forever. They are now in
+  `_WP_ONLY_SENSOR_KEYS` alongside the two power sensors that got this gating
+  in 1.4.7.
+- **No sensor for a connector you do not have.** Any entity keyed to a derived
+  split key (2301/2302/11501/11502) now stays unavailable until THIS station
+  has actually reported that data. On the original Guardian 6000 (`oB6OKs`,
+  one Anderson input, dpid 23/115 behaviour uncaptured) the split entities
+  will be absent rather than permanent `unknown` rows.
+
+### Added
+
+- `docs/FIELD-TEST-ORIGINAL-GUARDIAN.md`: a ten-minute owner checklist that
+  settles the three open dpid questions for the original Guardian, plus a
+  draft path for the compatibility report it produces.
+- Three regression guards (203 tests total) that fail the build if a derived
+  key ships without family gating or a split entity renders on a station that
+  never sent the data.
+
 ## 1.4.9 - 2026-10-16
 
 ### Added

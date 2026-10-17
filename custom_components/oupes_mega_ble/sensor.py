@@ -371,6 +371,8 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             if not slot_data:
                 return False  # slot never seen
             return True
+        if split_key_never_reported(desc, self.coordinator.data["attrs"]):
+            return False
         return True
 
     @property
@@ -435,9 +437,38 @@ def _derive_ext_count(ext_batteries: dict | None) -> int | None:
 # Sensors that only make sense on the "WP" firmware family (Guardian / D5 V2),
 # where attr 23 packs the power of both DC inputs.  On every other model attr 23
 # is a single wattage, so these two entities would sit unavailable forever.
+# The two voltage sensors join the ban for the same reason and a sharper one:
+# their data keys (11501/11502) are produced ONLY by the WP sequence reader's
+# split of a packed dpid 115, so on a Mega the lookup can never hit - the
+# entities would not merely sit idle, they would render `unknown` forever.
+# On the ORIGINAL Guardian 6000 (oB6OKs, one Anderson input) dpid 115 is
+# uncaptured: if it does not report 115 the pair is invisible (missing dpid);
+# whether it reports one input's voltage or a packed pair is an open field
+# question - see the V1 field-test checklist.
 _WP_ONLY_SENSOR_KEYS = frozenset(
-    {"dc_input_1_power", "dc_input_2_power"}
+    {
+        "dc_input_1_power",
+        "dc_input_2_power",
+        "dc_input_1_voltage",
+        "dc_input_2_voltage",
+    }
 )
+
+
+def split_key_never_reported(desc, attrs: dict) -> bool:
+    """True for a derived (split pseudo) data key the station never reported.
+
+    dpid 23/115 splits produce synthetic keys (2301/2302, 11501/11502) that only
+    exist when THIS product's firmware actually packs the pair. A Guardian 6000
+    V1 with one Anderson input, or any firmware that never sends the packed
+    dpid, would otherwise carry a permanent `unknown` entity - a sensor for a
+    connector the machine does not have. Missing beats lying.
+    """
+    if desc.slot is not None or desc.data_key is None or desc.attr is None:
+        return False
+    if desc.data_key == desc.attr:
+        return False
+    return desc.data_key not in attrs
 
 
 async def async_setup_entry(
