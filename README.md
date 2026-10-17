@@ -253,7 +253,13 @@ advertises the BLE name `WP`. A **Mega** advertises `TT`.
 > | Value | What it is | Where it is used |
 > | --- | --- | --- |
 > | **Email address** | the address you log in to the Cleanergy app with | the **Fetch key from Cleanergy cloud account** screen, with the password. One request; it is not stored and it never reaches the station |
-> | **User ID** | a **numeric** id the vendor assigns to your account — five digits, and the Cleanergy app **does** show it, on the **Settings** (cog) screen | typed directly into **Use my Cleanergy user ID**, or fetched for you by the cloud request above. The binding key is `md5(user ID)` truncated to 10 characters |
+> | **User ID** | a **numeric** id the vendor assigns to your account — **five digits**, shown on the Cleanergy app's **Settings** (cog) screen | typed into **Use my Cleanergy user ID**, or fetched for you by the cloud request above. From it the integration derives the station's **device key** — a *different*, ten-character value: `md5(user ID)` truncated to 10 hex characters |
+>
+> Two values, don't let the arithmetic blur them: the **user ID is five digits**
+> (you can see it on the app's Settings screen), and only the **derived device key
+> is ten hex characters** (you never type it unless you chose the manual route).
+> `22898` is a user ID; its key is ten characters *because it is the hash*, not
+> because the ID grew.
 >
 > The user ID is a number, **not** your email address. The field says so by refusing anything
 > that is not a number, and that is deliberate: the Bluetooth key is an MD5 over the *number*,
