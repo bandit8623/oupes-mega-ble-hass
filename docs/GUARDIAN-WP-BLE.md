@@ -267,7 +267,7 @@ Over the air updates are the vendor app's job, so this day may come. The sequenc
    dashboards and automations built on those entities are merely unavailable and come
    back on re-enable. Removing the entry deletes them, and the setup has to be done
    again from the pairing screen.
-2. Wake the station, connect the app, update, and let the station reboot.
+2. Wake the station, connect the app, and run the update.
 3. **Force-close the Cleanergy app** before you touch Home Assistant again. Kill it, do
    not just background it or leave it sitting on the update screen. Switching the phone's
    Bluetooth off works too, and works even when the app is wedged.
