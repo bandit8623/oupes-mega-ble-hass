@@ -103,7 +103,7 @@
           "go_back": "← Go back and choose a different method"
         },
         "data_description": {
-          "device_key": "Exactly 10 hex characters, for example 9256f177e0. On a Guardian / D5 V2 it is md5(user ID)[:10], so every station on your account shares the same key - it is not unique to one device.",
+          "device_key": "Exactly 10 hex characters (digits 0-9 and letters a-f), for example 9256f177e0. On a Guardian / D5 V2 it is md5(user ID)[:10], so every station on your account shares the same key - it is not unique to one device. Your five-digit user ID does not go in this field.",
           "go_back": "Check this and click Submit to return to the method selection screen."
         }
       },
