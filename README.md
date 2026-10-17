@@ -347,14 +347,18 @@ So the order of operations is fixed by the hardware, not by preference:
    sequence is written up in
    [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md#when-a-firmware-update-needs-the-app).
 
-**After the first pairing works**: note the user ID down while you are in the
-settings. **Cog on the OUPES card → Configure**, the `Cloud userId` field — that is
-the number step 7 fetched, and it is all any future re-add will need. (An entry
-built by typing a device key instead shows `0` there, because nothing ever told
-Home Assistant the value; the Cleanergy app's **Settings** (cog) screen always shows
-the number. For completeness: the vendor's login request returns it as `info.uid`,
-which is what the cloud fetch reads — details in
-[docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).)
+**Connected? Before you close the settings, save your user ID.**
+**Cog on the OUPES card → Configure** shows it in the **Cloud userId** field —
+the five-digit user ID that step 7 fetched for you. Write it down somewhere
+permanent: every future re-add of this station needs only those five digits —
+no password, no email, no network. That promise holds as long as you **never
+remove the station from the Cleanergy app**: removal erases the identity the
+station checks the digits against, and only the app can pair it again.
+(An entry built by typing a device key instead shows `0` in that field, because
+nothing ever told Home Assistant the value — the Cleanergy app's **Settings**
+(cog) screen always shows the number. For completeness: the vendor's login
+request returns it as `info.uid`, which is what the cloud fetch reads — details
+in [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).)
 
 **Do not use "Create a new device key" on a station that is already paired.** That
 path claims the station and overwrites what it holds, and on this firmware family it
