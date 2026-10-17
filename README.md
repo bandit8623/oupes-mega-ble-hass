@@ -247,6 +247,22 @@ advertises the BLE name `WP`. A **Mega** advertises `TT`.
 
 ### Guardian / D5 V2 (`WP`) — needs the user ID, once
 
+**Just want it working? Two steps:**
+
+1. **First time:** at the pairing screen choose **Fetch key from Cleanergy cloud
+   account** and type the **same email and password you use in the Cleanergy app**.
+   That is all. It pairs, and the number it looked up is saved in the integration.
+2. **Any time after:** if you ever have to re-add the station, it needs only the
+   **five-digit number** — the Cleanergy app shows it under **Settings** (the cog),
+   and the integration's **Configure** screen shows it too.
+
+Two things that break pairing, both avoidable: typing your **email where the
+five-digit number goes**, and **removing the station from the Cleanergy app**
+after pairing — that erases what the app wrote into the station, and nothing can
+pair it except the app again.
+
+Everything below explains *why* it works that way. You do not need it to succeed.
+
 > **The email address is not the user ID.** Two different account values appear in these
 > pages, and conflating them is the most common way to get stuck:
 >
