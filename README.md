@@ -301,9 +301,13 @@ So the order of operations is fixed by the hardware, not by preference:
    unit. That is what writes the pair into the station. Skip only if it is already
    in the app on *your* account.
 3. **Do not remove it from the app afterwards.** Closing the app is enough to free
-   the radio. Removing the station also wiped the pairing Home Assistant authenticates
-   with on the unit tested here, and re-adding rewrote it. The vendor's unbind behaviour
-   was flaky in testing (the same removal did not always unbind - see the confidence
+   the radio - and **uninstalling the app is fine too**: the pairing lives in the
+   station and on the account, not on your phone. Reinstall it whenever you want
+   live app control or an over-the-air firmware update. Removing the *station*
+   inside the app is the destructive one - it wiped the pairing Home Assistant
+   authenticates with on the unit tested here, and re-adding rewrote it. The
+   vendor's unbind behaviour was flaky in testing (the same removal did not always
+   unbind - see the confidence
    table in [the WP guide](docs/GUARDIAN-WP-BLE.md)), so the safe assumption is that it
    wipes and you would have to pair again.
 4. **Switch the phone's Bluetooth off** — or force-close the app. One Bluetooth
