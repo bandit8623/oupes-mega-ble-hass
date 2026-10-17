@@ -350,15 +350,15 @@ So the order of operations is fixed by the hardware, not by preference:
 **Connected? Save your user ID - it is all any future re-add needs.**
 Before you close the settings, write the five-digit user ID down somewhere
 permanent. **Cog on the OUPES card → Configure** shows it in the **Cloud userId**
-field - the number step 6 fetched for you - and the Cleanergy app's **Settings**
-(cog) screen always shows it too.
+field - the five-digit code step 6 fetched for you - and the Cleanergy app's
+**Settings** (cog) screen always shows it too.
 
 Re-adding a powered station later is then five digits, no email, no password, no
 internet: power and wake the station, make sure it is still in the Cleanergy app
 on your account with the phone's Bluetooth **off**, open the setup form, and when
 the credentials screen appears choose **Use my Cleanergy user ID** - on a
-recognised Guardian it is already selected - and enter the digits. Connection
-settings, submit, wait fifteen seconds: identical to steps 7-10 above.
+recognised Guardian it is already selected - and enter the five-digit code.
+Connection settings, submit, wait fifteen seconds: identical to steps 7-10 above.
 
 That promise holds as long as you **never remove the station from the Cleanergy
 app** - removal erases the identity the station checks the digits against, and
