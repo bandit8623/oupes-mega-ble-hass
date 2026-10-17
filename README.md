@@ -319,7 +319,7 @@ So the order of operations is fixed by the hardware, not by preference:
      into **Bluetooth MAC Address**. The station advertises as `WP`; your proxy's device
      list gives you the address. A nearby station is pre-filled into that field when an
      adapter saw it.
-6. On **How would you like to provide the device key?**, choose
+6. A screen opens asking **where the credentials should come from**. Choose
    **Fetch key from Cleanergy cloud account** and sign in with the **same email
    and password you use in the Cleanergy app** - Home Assistant must use the very
    account the station was paired with. One request, and Home Assistant has what
@@ -365,9 +365,9 @@ Once this station has connected through the cloud account as above, every future
 add can be done with the five digits you just saved - no email, no password, no
 internet needed. Power and wake the station, make sure it is still in the
 Cleanergy app on your account with the phone's Bluetooth **off**, open the setup
-form, and at **How would you like to provide the device key?** choose
+form, and when the credentials screen appears choose
 **Use my Cleanergy user ID** - on a recognised Guardian it is already selected -
-and enter the five digits. The key is derived on the spot. Then connection
+and enter the five digits - that is all Home Assistant needs. Then connection
 settings, submit, wait fifteen seconds: identical to steps 7-10 above. The only
 time the email login comes back is after the station was re-paired in the app.
 If the number is lost: the Cleanergy app's **Settings** (cog) screen always shows
