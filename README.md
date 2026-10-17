@@ -325,8 +325,6 @@ So the order of operations is fixed by the hardware, not by preference:
    account the station was paired with. Your five-digit user ID is read straight
    out of the login response and the key is derived from it: one request, the
    password is not stored, and there was nothing to look up beforehand.
-   (Already have the five digits from a previous setup? There is a shorter route -
-   see [Using your Cleanergy user ID](#using-your-cleanergy-user-id) below.)
 7. Fill in **Connection settings** and submit. Neither path writes anything to the
    station; it simply turns up with the credentials the app already left there.
 8. **Wait about fifteen seconds.** Roughly 44 entities appear. The two DC input
@@ -361,25 +359,6 @@ nothing ever told Home Assistant the value — the Cleanergy app's **Settings**
 (cog) screen always shows the number. For completeness: the vendor's login
 request returns it as `info.uid`, which is what the cloud fetch reads — details
 in [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).)
-
-#### Using your Cleanergy user ID
-
-This is the route for **re-adds**. The email login above is genuinely needed once -
-the first time you pair this station, or again after it has been re-paired in the
-app. Once you hold the five-digit user ID, no password is ever required again.
-
-Run steps 1-5 exactly as above, then at **How would you like to provide the device
-key?** choose **Use my Cleanergy user ID** and **enter the number** - digits only.
-The key is derived on the spot: no sign-in, no network request, works with the
-internet switched off. On a recognised Guardian this option is already selected for
-you. It is also the answer for anyone who would rather not hand this integration a
-password at all - the one value it receives here is the number.
-
-Where the number comes from, in order of convenience: the note you made after your
-first pairing (see above), any existing entry's **Configure → Cloud userId**, or
-the Cleanergy app's **Settings** (cog) screen - it is always there.
-
-Do **not** pick **Create a new device key** - see the warning directly below.
 
 **Do not use "Create a new device key" on a station that is already paired.** That
 path claims the station and overwrites what it holds, and on this firmware family it
@@ -425,6 +404,44 @@ need for any wired alternative, and this integration uses whichever proxy can he
 the station. **BLE is the only path**, so that is the one to make reliable.
 
 ---
+
+## Connecting with your Cleanergy user ID (second guide)
+
+The Quick Start walks the email-login route. This is the **other way in**: the
+same pairing, performed with one five-digit number and **no password at all**.
+It applies to the Guardian / D5 V2 family (`WP`); Mega (`TT`) needs neither
+value.
+
+**When this route is the right one:** you are re-adding a station you have set
+up here before, or you simply do not want to type your Cleanergy password into
+anything. The email login is genuinely needed only once - the first pairing of
+a station, or again after it was re-paired in the app.
+
+**What you need: the five-digit user ID.** It exists only after the station's
+first successful pairing, and you can read it from three places: the note you
+were told to make at the end of the Quick Start, any existing entry under
+**cog on the OUPES card → Configure → Cloud userId** (entries made through the
+email login), or the Cleanergy app's **Settings** (cog) screen - always there.
+
+**The steps:**
+
+1. Bring the station to the same state the Quick Start requires before its
+   setup form: powered and awake (one press of the IoT button), already in the
+   Cleanergy app on *your* account and never removed from it, the phone's
+   Bluetooth **off**, and the Home Assistant setup form in front of you -
+   the discovered card or **Add Integration → OUPES** with the MAC address.
+2. At **How would you like to provide the device key?** choose
+   **Use my Cleanergy user ID** and enter the five digits - digits only. The
+   key is derived on the spot: no sign-in, no network request, works with the
+   internet switched off. On a recognised Guardian this option is already
+   selected for you.
+3. Fill in **Connection settings**, submit, and wait about fifteen seconds.
+   From here everything is identical to the Quick Start from its step 7 on -
+   including the warning there about never picking **Create a new device key**
+   on a paired station.
+
+Would rather not hand this integration your password? This route needs none.
+It is one number, and the key follows from it.
 
 ## Tuning (Settings → Devices & Services → your OUPES entry → **Configure**, the cog)
 
