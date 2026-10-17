@@ -298,16 +298,9 @@ So the order of operations is fixed by the hardware, not by preference:
    was flaky in testing (the same removal did not always unbind - see the confidence
    table in [the WP guide](docs/GUARDIAN-WP-BLE.md)), so the safe assumption is that it
    wipes and you would have to pair again.
-4. **Use the same account in Home Assistant that the app paired with.** The number to
-   check is your five-digit Cleanergy user ID — the app shows it on the **Settings**
-   (cog) screen. You normally do not need to look it up at all, because
-   the cloud login in step 7 reads it for you. If you do want it: an existing entry
-   also shows it (**cog on the OUPES card → Configure**, the `Cloud userId` field) - but
-   only if that entry was set up through the email login, because that is the request
-   that fetches the number. An entry built by typing a device key by hand shows `0`
-   there, since nothing ever told Home Assistant the value. From scratch, a vendor
-   login request returns it as `info.uid` - see
-   [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).
+4. **Use the same account in Home Assistant that the app paired with.** Nothing to
+   look up beforehand: the cloud login in step 7 reads the account's five-digit
+   user ID for you.
 5. **Switch the phone's Bluetooth off** — or force-close the app. One Bluetooth
    client at a time, and an app still holding the station produces a pairing
    failure that looks like a broken integration.
@@ -353,6 +346,15 @@ So the order of operations is fixed by the hardware, not by preference:
    so you can go back and forth between HA and the app as often as you like. The
    sequence is written up in
    [docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md#when-a-firmware-update-needs-the-app).
+
+**After the first pairing works**: note the user ID down while you are in the
+settings. **Cog on the OUPES card → Configure**, the `Cloud userId` field — that is
+the number step 7 fetched, and it is all any future re-add will need. (An entry
+built by typing a device key instead shows `0` there, because nothing ever told
+Home Assistant the value; the Cleanergy app's **Settings** (cog) screen always shows
+the number. For completeness: the vendor's login request returns it as `info.uid`,
+which is what the cloud fetch reads — details in
+[docs/GUARDIAN-WP-BLE.md](docs/GUARDIAN-WP-BLE.md).)
 
 **Do not use "Create a new device key" on a station that is already paired.** That
 path claims the station and overwrites what it holds, and on this firmware family it
