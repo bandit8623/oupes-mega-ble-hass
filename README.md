@@ -253,11 +253,12 @@ advertises the BLE name `WP`. A **Mega** advertises `TT`.
    account** and type the **same email and password you use in the Cleanergy app**.
    That is all. It pairs, and the number it looked up is saved in the integration.
 2. **Any time after:** if you ever have to re-add the station, it needs only the
-   **five-digit number** — the Cleanergy app shows it under **Settings** (the cog),
-   and the integration's **Configure** screen shows it too.
+   **five-digit number — that number is the "user ID"**, and it goes in the field
+   that says so. The Cleanergy app shows it under **Settings** (the cog), and the
+   integration's **Configure** screen shows it too.
 
 Two things that break pairing, both avoidable: typing your **email where the
-five-digit number goes**, and **removing the station from the Cleanergy app**
+five-digit user ID goes**, and **removing the station from the Cleanergy app**
 after pairing — that erases what the app wrote into the station, and nothing can
 pair it except the app again.
 
