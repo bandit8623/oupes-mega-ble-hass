@@ -87,15 +87,15 @@ added part-way through testing, which is why some earlier notes here say two). T
 software version worth quoting for that unit: the Cleanergy app shows `0.0.4` while the
 vendor's cloud record for the same station says `1.2.0`, and the vendor does not change
 those strings on every update. Match your unit by BLE name (`WP`) and product id
-(`95haDY`), and by behaviour - if `md5(user ID)[:10]` authenticates, this page describes
-your station whatever the app says.
+(`95haDY`), and by behaviour - if pairing with your Cleanergy user ID authenticates, this
+page describes your station whatever the app says.
 
 #### Which pairing method to choose
 
-**Use my Cleanergy user ID** is the one to pick on a `WP` station. The binding
-key is `md5(user ID)` truncated to ten characters, which is how the official
-app generates it, so the number is the whole credential and nothing has to be
-captured, looked up or pasted.
+**Use my Cleanergy user ID** is the one to pick on a `WP` station. Enter the
+five-digit user ID — the Cleanergy app shows it under **Settings** (the cog) —
+and everything else is derived for you. Nothing has to be captured, looked up
+or pasted.
 
 **Fetch key from your account** does the same thing one step further removed: it
 logs in with your email and password, reads the user ID out of the login
@@ -209,9 +209,10 @@ OUPES Mega** and enter the Bluetooth MAC address (e.g., `8C:D0:B2:A7:EC:AF`).
 
 ### Step 2 — Provide the device key
 
-After discovery, the integration asks you to choose how to provide the
-**device key** — a 10-character hex string the device uses to authenticate BLE
-sessions. The screen offers four options, listed in this order:
+After discovery, the integration asks how the station should authenticate
+itself. On a Guardian / D5 V2 choose the user ID option and type the five-digit
+number from the Cleanergy app's **Settings** screen; the rest is derived. The
+screen offers four options, listed in this order:
 
 1. **Use my Cleanergy user ID** — see
    [Which pairing method to choose](#which-pairing-method-to-choose) above. This
@@ -236,7 +237,7 @@ dependency. This replicates the Cleanergy app's pairing protocol.
    clears the stored pairing key and puts the device into pairing mode.
 2. **Re-enable the IoT module:** After the reset the IoT module turns off —
    press the IoT button once to turn it back on (indicator flashes rapidly).
-3. A random 10-hex-character key is pre-filled (you can change it).
+3. A random new key is pre-filled (you can change it).
 4. Click **Submit** — a progress spinner appears while pairing runs (~20 s).
 5. When pairing completes, the integration is ready.
 
@@ -252,13 +253,13 @@ dependency. This replicates the Cleanergy app's pairing protocol.
 
 *On screen: "Enter an existing device key".*
 
-On a **Guardian / D5 V2 (`WP`)** station you should not need this screen at all. The key
-is `md5(user ID)[:10]`, which **Option A** derives from your user ID, so there is nothing
-to look up.
+On a **Guardian / D5 V2 (`WP`)** station you should not need this screen at all —
+the **Use my Cleanergy user ID** option derives everything from your user ID.
 
-The field takes **exactly 10 hex characters** and lower-cases what you type. Your user ID
-does not go in it: that is a short decimal number — five digits on the account measured
-here — and a decimal user ID is not 10 hex characters, so the form refuses it.
+Do **not** type your user ID here: this field expects an already-captured device
+key, not the five-digit number, and the form refuses the number. The only reason
+to be on this screen is that you already hold a real key — for example from a
+Bluetooth log.
 
 What is left for this screen: older stations whose key came from the pairing procedure, or
 a key you recovered from your own capture. See
@@ -439,7 +440,7 @@ The `Cloud userId` field there also tells you which user ID the entry is using, 
 the quickest way to read your own number back out. It only holds a real value if the
 entry went through the email login, since that request is what looks the number up; an
 entry built by typing a device key shows `0`, which is expected and not a fault. The
-Cleanergy app does not display the number anywhere.
+Cleanergy app also displays the number on its **Settings** (cog) screen.
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -510,28 +511,30 @@ logger:
 
 ## Understanding the Device Key
 
-The **device key** (`device_key`) is a 10-character hex string that
-authenticates BLE sessions. The device and the client must agree on the same
-key for telemetry to flow.
+**Plain words first: you only ever need the five-digit user ID** — the app shows it
+under **Settings** (the cog). Home Assistant works everything else out by itself.
+This section explains what it works out, for the curious.
+
+The **device key** (`device_key`) is a short code that authenticates Bluetooth
+sessions. The device and the app must agree on the same key for telemetry to flow.
 
 ### How the key is derived (Cleanergy app convention)
 
-The official Cleanergy app derives the key from your numeric cloud user ID:
+The official Cleanergy app derives the key from your five-digit user ID:
 
 ```python
 import hashlib
 device_key = hashlib.md5(str(user_uid).encode()).hexdigest()[:10]
 ```
 
-However, the device doesn't enforce this derivation — the uid-based MD5 is a convention
-in the app. What the station actually checks is the key it was paired with, which is a
-10-character hex string; a wrong one fails the handshake. Two family-specific notes:
+The app computes the key this way, and the station checks the exact value it was
+paired with — on **Guardian / D5 V2** stations the derivation is enforced: saving a
+wrong user ID re-derives a wrong key and the station drops the link within seconds
+(measured). Two family-specific notes:
 
-- On **Guardian / D5 V2 (`WP`)** stations the paired key *is* `md5(userId)[:10]`, so
+- On **Guardian / D5 V2 (`WP`)** stations the paired key *is* that derivation, so
   every station on your account shares one key. It is not unique to a device, and there
-  is no key to capture. Measured here: saving a wrong user ID re-derives the key, and the
-  station drops the link within seconds - so "any 10 hex characters" is true of the
-  *format* the form accepts, never of the value you can get away with sending.
+  is no key to capture.
 - On the older **`TT` (Mega)** stations the key is written during pairing, so two units on
   the same account can carry different keys. That per-unit behaviour comes from the pairing
   procedure; this fork has not measured that family.
@@ -545,8 +548,8 @@ in the app. What the station actually checks is the key it was paired with, whic
 During the integration setup (Step 2 above), the screen titled *How would you
 like to provide the device key?* offers four methods:
 
-- **Use my Cleanergy user ID:** Give the numeric user ID (five digits on the account
-  measured here) and the integration derives `md5(user ID)[:10]` locally. One request is
+- **Use my Cleanergy user ID:** Give the five-digit user ID and the integration derives
+  the key locally. One request is
   never made, and nothing is sent anywhere. This is the option to pick on a `WP` station.
 - **Fetch key from Cleanergy cloud account:** Sign in with the email and password you use
   in the app; the integration reads your user ID out of the vendor's own login response and
@@ -564,7 +567,7 @@ use `debug_info/pair_device.py` from this repo:
 
 ```powershell
 # Factory-reset the device first: hold IoT button 5 s until rapid flashing
-python debug_info/pair_device.py <MAC> --key <new_10_hex_char_key>
+python debug_info/pair_device.py <MAC> --key <new_key>
 ```
 
 The script replicates the exact BLE pairing protocol the Cleanergy app uses
