@@ -362,6 +362,37 @@ The integration's options also offer **Log raw frames** and **Log attributes**, 
 append to CSV files under the config directory. Reach for `raw` last: that file
 contains the AUTH frame, so it holds your user ID in the clear.
 
+### The Bluetooth side wedged after an app update
+
+One more cause earns its own heading because the symptoms mislead: a Cleanergy app
+update can wedge the station's Bluetooth while its Wi-Fi keeps working. The app shows
+the station online, cloud figures keep moving, Home Assistant's entities sit frozen
+and its log repeats `Continuous BLE error`. The phone is not the culprit - this is
+the station's own radio state.
+
+The fix is to restart the station's wireless module with the lane clear:
+
+1. Force-close the Cleanergy app, or switch off Bluetooth on every phone that has it.
+   The station re-advertises when its radio comes back, and an awake app will grab
+   the station's single Bluetooth slot the same way it does during normal pairing (§6).
+2. Press the station's **IoT button briefly** - off, wait ten seconds, on.
+   **Briefly**: a long press is the factory-reset gesture (§7).
+3. Home Assistant reconnects within about a minute on its own.
+
+The device key survives: the station authenticates with the same pairing, so nothing
+has to be set up again. An app update does not unpair the station.
+
+**A note on updates.** The app will happily *offer* a firmware update while Home
+Assistant holds the Bluetooth connection - the offer comes from the cloud - but the
+install travels over the app's own Bluetooth link. Attempt it anyway and the app
+responds "already up to date" having done nothing. The update is real; the channel
+was busy. To actually apply it: disable the HA entry, let the app connect over
+Bluetooth, update, then re-enable.
+
+Verified 2026-10-17 on Guardian 6000 V2 (`95haDY`): thirty minutes of dead Bluetooth
+after an app update; a brief IoT-button press with the phone's Bluetooth off restored
+the stream in under sixty seconds, same key, no re-pairing.
+
 ---
 
 ## 9. Data you should expect to see

@@ -344,7 +344,11 @@ So the order of operations is fixed by the hardware, not by preference:
    Disabling releases the Bluetooth connection, keeps the entry and its entities, and
    reconnects on its own when you switch it back on **provided the app has let go of the
    radio** - the station serves one Bluetooth client, so force-close Cleanergy, or switch
-   the phone's Bluetooth off, before you re-enable. Deleting throws the entry's
+   the phone's Bluetooth off, before you re-enable. Note also that an update offered
+   while Home Assistant is connected will refuse to install - the app shows the update
+   as available but answers "already up to date", because installing runs over the
+   app's own Bluetooth link, which Home Assistant is holding. Disable the entry first,
+   then update. Deleting throws the entry's
    entities away, so every dashboard card and automation pointed at them goes dead and
    the whole setup has to be done again. Nothing about the station changes either way,
    so you can go back and forth between HA and the app as often as you like. The
@@ -386,6 +390,20 @@ never bound it.
 
 That is the missing identity, not a range problem. Open **Options** on the entry
 and either fetch the values from your cloud account or enter them.
+
+---
+
+### If telemetry stopped after a Cleanergy app update
+
+The station shows online in the app but Home Assistant's values freeze - the app
+update can wedge the station's Bluetooth while its Wi-Fi stays up. Force-close the
+app **or turn off phone Bluetooth** (the station re-advertises during recovery and an
+awake app will steal the slot), then briefly press the station's **IoT button** -
+off, wait ten seconds, on. **Briefly**: a long press is the factory-reset gesture.
+Home Assistant reconnects within a minute, and the pairing survives. If you took an
+app or firmware update in the process, remember the app needs the station's Bluetooth
+for the install itself - an update attempted while Home Assistant is connected
+reports "already up to date" and changes nothing.
 
 ---
 
