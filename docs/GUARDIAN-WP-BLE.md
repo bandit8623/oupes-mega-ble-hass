@@ -56,8 +56,9 @@ returned by no email-and-password API, and it was never needed.
 
 ## 3. Getting your user ID
 
-**The Cleanergy app shows this number on its Settings (cog) screen** — five digits.
-Three ways to get it, easiest first:
+**The Cleanergy app shows this number on its Settings (cog) screen** — five digits
+on every account measured so far (newer accounts may carry more; nothing in the
+protocol pins a length). Three ways to get it, easiest first:
 
 * **From an entry you already have working.** The cog on the OUPES card →
   **Configure**, and read the **Cloud userId** field, which comes pre-filled. It only
