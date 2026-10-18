@@ -59,3 +59,17 @@ def test_shutdown_is_idempotent() -> None:
         "coordinator.async_shutdown() must guard against double execution "
         "(stop listener fires it early; unload calls it again)."
     )
+
+
+def test_release_callback_is_thread_safe() -> None:
+    """Regression 2026-10-17 (second incident): HA may run the stop callback
+    from an executor thread. ``hass.async_create_task`` from a non-loop
+    thread is rejected by HA 2026's frame guard - the disconnect was then
+    skipped silently and the station stayed glued to a proxy (22-minute
+    outage behind a solid IoT icon). The callback must hand off via
+    loop.call_soon_threadsafe (or equivalent threadsafe scheduling)."""
+    fn = INIT.split("def _release_ble")[1].split("async def ")[0]
+    assert "call_soon_threadsafe" in fn, (
+        "_release_ble must schedule via loop.call_soon_threadsafe so the "
+        "release survives being invoked off the event loop."
+    )

@@ -4,6 +4,8 @@
 
 ## The problem
 
+> **Scope note:** the *confusing signature* seen here — "HA reports the device nowhere and its own proxies show free slots, while some other proxy is silently holding the connection" — requires **two or more bluetooth proxies that can both reach the peripheral** (proxy A holds the device; HA's integration waits on advertisements that A will never show it). A single-proxy install shares the underlying "proxy keeps the link across an HA restart" hazard, but there is no second radio that can hold the device out of sight, so the misleading 0-of-3 free-slot red herring cannot occur. (Single-proxy reproduction of the reclaim gap itself: untested by this reporter.)
+
 Home Assistant's `bluetooth` integration discovers devices **only from live advertisements** and chooses a proxy per advertisement. Meanwhile, BLE peripherals are point-to-point: once linked to a proxy they **stop advertising**, and ESPHome `bluetooth_proxy` (by design) **keeps serving that link even after HA's API connection goes away** — e.g. across an HA restart.
 
 Result: after an HA restart, a peripheral that is healthy and still linked to a proxy becomes **permanently invisible** to HA. HA never asks any proxy "what do you already have attached?", never reclaims or reuses that session, and any integration waiting for the device hangs forever (e.g. `ConfigEntry` stuck in first refresh). No log line is ever produced; it fails silently.
@@ -12,7 +14,7 @@ The information exists: `BluetoothConnectionsResponse.free` / the connections-fr
 
 ## Reproduction (deterministic)
 
-Environment: HA Supervised 2026.10.2; two ESPHome ESP32-C5 `bluetooth_proxy` nodes (firmware 2026.7.1 and 2026.9.1, `noise_psk` enabled); any integration whose integration connects to a specific peripheral via `bleak` over HA's Bluetooth backend.
+Environment: HA Supervised 2026.10.2; two ESPHome ESP32-C5 `bluetooth_proxy` nodes (ESPHome 2026.7.1 and 2026.9.1, `noise_psk` enabled); any integration that connects to a specific peripheral via `bleak` over HA's Bluetooth backend.
 
 1. Peripheral (BLE MAC `X`) advertises; HA connects via proxy A. Link healthy for hours.
 2. HA restarts (`ha core restart`, graceful — the `homeassistant_stop` event fires).

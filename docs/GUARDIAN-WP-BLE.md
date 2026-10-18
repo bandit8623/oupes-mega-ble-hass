@@ -417,6 +417,18 @@ had accumulated a zombie link over 43 hours of uptime (`HCI Conn Exists`) and
 an unplug/replug of the proxy healed it instantly. Do not blame the app and do
 not guess at the station: look at the light first.
 
+Evening of the same day added the solid icon's second flavor: **cross-proxy
+session hold**. Two or more Bluetooth proxies that can both reach the station is
+a precondition - with a single proxy this state cannot occur. An interrupted
+graceful shutdown (two restarts stacked) skipped the integration's disconnect,
+so the station stayed *legitimately connected* to proxy B while Home Assistant's
+integration waited for advertisements via proxy A. Icon solid, proxy A shows
+free slots (the red herring), no amount of HA-side retry helps. Unplugging
+proxy B restored the stream in seconds. The same-day 1.4.12 fix made the
+stop-time disconnect thread-safe so the farewell survives a stacked restart;
+HA core itself still has no path to reclaim another proxy's live session
+(`docs/HA-CORE-BLUETOOTH-RECLAIM-ISSUE.md`).
+
 ---
 
 ## 9. Data you should expect to see

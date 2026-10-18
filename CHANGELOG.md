@@ -8,6 +8,20 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## Unreleased
+
+### Fixed
+
+- **The stop-time BLE release is now thread-safe.** Home Assistant can fire
+  its stop signal while our listener callback runs on an executor thread;
+  `hass.async_create_task` from a non-loop thread is rejected by HA 2026's
+  frame guard, which silently skipped the disconnect. Observed in the wild:
+  two overlapping restarts left the station linked to a *second* bluetooth
+  proxy, stopped advertising, and unreachable for 22 minutes (the HA-core
+  reclaim gap — see `docs/HA-CORE-BLUETOOTH-RECLAIM-ISSUE.md`). The release
+  now hands off via `loop.call_soon_threadsafe`, which is valid from any
+  thread.
+
 ## 1.4.11 - 2026-10-17
 
 ### Fixed

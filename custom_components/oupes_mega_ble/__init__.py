@@ -120,7 +120,21 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # (HCI "Conn Exists") until it is power-cycled. async_shutdown is
     # idempotent, so the normal unload path below stays harmless.
     def _release_ble(_event) -> None:
-        hass.async_create_task(coordinator.async_shutdown())
+        # homeassistant_stop can fire while our callback runs on an executor
+        # thread; hass.async_create_task() from a non-loop thread is rejected
+        # by HA 2026's thread guard, which silently skipped the disconnect
+        # and left the proxy holding the station (observed in production,
+        # 2026-10-17). call_soon_threadsafe is legal from any thread.
+        def _spawn() -> None:
+            try:
+                hass.async_create_task(coordinator.async_shutdown())
+            except Exception:  # noqa: BLE001 - loop closing; nothing to do
+                _LOGGER.debug("early BLE release skipped (loop closing)")
+
+        try:
+            hass.loop.call_soon_threadsafe(_spawn)
+        except RuntimeError:  # loop already closed - the link dies with us
+            _LOGGER.debug("early BLE release: loop gone")
 
     entry.async_on_unload(
         hass.bus.async_listen_once(_STOP_EVENT, _release_ble)
