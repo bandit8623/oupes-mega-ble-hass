@@ -15,12 +15,15 @@ This fork tracks
 - **The stop-time BLE release is now thread-safe.** Home Assistant can fire
   its stop signal while our listener callback runs on an executor thread;
   `hass.async_create_task` from a non-loop thread is rejected by HA 2026's
-  frame guard, which silently skipped the disconnect. Observed in the wild:
-  two overlapping restarts left the station linked to a *second* bluetooth
-  proxy, stopped advertising, and unreachable for 22 minutes (the HA-core
-  reclaim gap — see `docs/HA-CORE-BLUETOOTH-RECLAIM-ISSUE.md`). The release
-  now hands off via `loop.call_soon_threadsafe`, which is valid from any
-  thread.
+  frame guard, which silently skipped the disconnect. The visible stall
+  this caused needs **two or more Bluetooth proxies within reach of the
+  station**: observed in the wild when two overlapping restarts left the
+  station linked to a *second* proxy, stopped advertising, and unreachable
+  for 22 minutes (an HA-core reclaim gap - see
+  `docs/HA-CORE-BLUETOOTH-RECLAIM-ISSUE.md`). Single-proxy installs share
+  the skipped-farewell race but did not show this stall in practice;
+  recovery there is normally prompt. The release now hands off via
+  `loop.call_soon_threadsafe`, which is valid from any thread.
 
 ## 1.4.11 - 2026-10-17
 
