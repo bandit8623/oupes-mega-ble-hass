@@ -52,6 +52,26 @@ def _install_ha_stubs() -> None:
             return _Anything()
 
     _stub("bleak_retry_connector", establish_connection=lambda *a, **k: None)
+    # bleak is NOT installed on CI runners (it is a transitive HA dep, and the
+    # local dev box only has it via unrelated tooling). coordinator.py imports
+    # BleakClient + BleakError at module level, so stub both. If a real bleak
+    # ever IS installed, tests keep using it only if already imported; the
+    # stub keeps the CI signal honest either way.
+    if "bleak" not in sys.modules or not hasattr(sys.modules["bleak"], "BleakClient"):
+        bleak_exc = _stub(
+            "bleak.exc",
+            BleakError=type("BleakError", (Exception,), {}),
+            BleakClientNotConnected=type("BleakClientNotConnected", (Exception,), {}),
+            BleakDeviceNotFoundError=type("BleakDeviceNotFoundError", (Exception,), {}),
+        )
+        bleak = _stub(
+            "bleak",
+            BleakClient=_anything_cls("BleakClient"),
+            exc=bleak_exc,
+        )
+        bleak.exc = bleak_exc  # type: ignore[attr-defined]
+        _stub("bleak.backends", )
+        _stub("bleak.backends.device", Device=_anything_cls("BleakDevice"))
     ha = _stub("homeassistant")
     comp = _stub("homeassistant.components")
     core = _stub("homeassistant.core", HomeAssistant=_Anything)
