@@ -198,3 +198,12 @@ def test_voltage_overrides_share_the_xt60_vocabulary():
     for name in (v1, v2):
         assert "XT60" in name, f"{name!r} does not use the owner-reported connector word"
         assert not name.endswith("Voltage"), f"{name!r} grew a redundant unit-ish suffix"
+
+
+def test_dc_total_override_is_honest_about_being_a_sum():
+    """attr 23 on 95haDY is the two XT60 halves combined, and 'Solar' is
+    only the firmware's word for the MPPT input - the owner reads it as the
+    DC total, so 95haDY ships 'DC Input Total Power'. Entity id stays
+    `solar_input_power` (identity from key, not name)."""
+    overrides = _product_names(_tree())["95haDY"]
+    assert overrides.get("solar_input_power") == "DC Input Total Power"

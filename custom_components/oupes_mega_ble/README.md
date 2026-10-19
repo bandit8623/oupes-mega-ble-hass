@@ -303,6 +303,7 @@ retrieved key is saved.
 | Battery Energy Stored | derived | Wh | Guardian family only: Σ (SoC × 4,608 Wh) over the main unit **and every expansion pack reporting this poll** — add a G5 and the ceiling rises automatically; nothing reported means unknown, never a fake number |
 | Estimated Runtime Left | derived | min | Battery Energy Stored ÷ **measured total load** (AC + 12 V + USB-C + USB-A — dpid 4 alone is AC-only, CSV-proven). Refuses instead of lying: idle load under 5 W and horizons past a week both report unknown |
 | Estimated Time To Full | derived | min | Energy deficit ÷ **net** charge input (Total Input Power dpid 21 − live load, so passthrough watts that never reach the battery don't flatter the answer). Refuses when full, idle, discharging, or beyond a week; linear, no efficiency modelled |
+| Battery Status | derived | — | One word — **Charging / Discharging / Full / Idle** — from the same net-input math as the time sensors, so it can never contradict an `unknown` next to it; it explains *why* there is no minute estimate (e.g. "Idle — not charging") |
 | Main Unit Temperature | 32 | °F | Internal temperature (÷10; e.g. raw 963 → 96.3 °F) |
 | External Battery 1–N Runtime | 78 | min | Per battery module. Clamped to the configured runtime cap (default 5940 min / 99 h) when charging or idle. |
 | External Battery 1–N Charge | 79 | % | Direct battery percentage (raw value = %) |

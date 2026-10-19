@@ -968,3 +968,38 @@ def total_load_w(attrs: dict[int, int]) -> float | None:
     None only when the station reported no output register at all."""
     vals = [attrs[k] for k in _OUTPUT_POWER_DPIDS if isinstance(attrs.get(k), (int, float))]
     return float(sum(vals)) if vals else None
+
+
+def battery_status(
+    series: str,
+    attrs: dict[int, int],
+    ext_batteries: dict[int, dict[int, int]] | None,
+) -> str | None:
+    """One word for what the battery is doing: Charging / Discharging /
+    Full / Idle, or None when nothing reported (entity -> unavailable).
+
+    Same inputs as the time sensors - deficit, net input (dpid 21 minus
+    every output register) - so the status can never contradict an
+    "unknown" next to it: it answers WHY there is no minute estimate.
+    Full outranks Charging because a station at 100% has stopped accepting
+    charge whatever the input gauge still shows.  Uses the same
+    _MIN_MEANINGFUL_LOAD_W hysteresis floor as both time sensors, so
+    "Idle" means exactly "the load/input is below the refusal threshold".
+    """
+    if WH_PER_BATTERY_UNIT.get(series) is None:
+        return None
+    missing = missing_energy_wh(series, attrs, ext_batteries)
+    if missing is None:
+        return None
+    load = total_load_w(attrs)
+    gross_in = attrs.get(21)
+    if gross_in is None and load is None:
+        return None
+    net = (gross_in or 0) - (load or 0)
+    if missing <= 0.0:
+        return "Full"
+    if net >= _MIN_MEANINGFUL_LOAD_W:
+        return "Charging"
+    if net <= -_MIN_MEANINGFUL_LOAD_W:
+        return "Discharging"
+    return "Idle"

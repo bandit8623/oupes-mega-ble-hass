@@ -49,7 +49,8 @@ This fork tracks
   beyond-a-week horizons all report unknown - the failure mode that makes
   the firmware's own runtime read nonsense near full charge. Series with
   unverified nameplate capacity (Mega) get none of the three.
-- **Firmware `Remaining Runtime` demoted, not removed.** It now lives in
+- **`Battery Status` text sensor** (Guardian family): Charging / Discharging / Full / Idle, computed from the
+  same net-input math as the time sensors - so when they rightly report `unknown`, this one says why instead of shrugging., not removed.** It now lives in
   the device's Diagnostic section - still enabled, still logging history
   for comparison - but no longer sits next to the estimate that replaced
   it.

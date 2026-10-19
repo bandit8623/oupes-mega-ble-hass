@@ -31,6 +31,7 @@ from .coordinator import OUPESMegaCoordinator
 from .protocol import (
     ATTR_MAP,
     average_pack_soc,
+    battery_status as compute_battery_status,
     missing_energy_wh,
     runtime_estimate_minutes,
     stored_energy_wh,
@@ -137,6 +138,16 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:timer-plus",
+    ),
+    OUPESSensorDescription(
+        # Plain-text companion of the two time sensors: when they rightly
+        # refuse, this says why (Idle / Full / Discharging / Charging).
+        # Deliberately a text sensor - minutes must stay numeric for graphs
+        # and numeric_state automations.
+        key="battery_status",
+        attr=3,
+        name="Battery Status",
+        icon="mdi:battery-heart-variant",
     ),
     OUPESSensorDescription(
         key="total_output_power",
@@ -311,6 +322,10 @@ _CAR_PORT_POWER_NAMES: dict[str, str] = {
 # them would move entity_ids on stations nobody has inspected, for a cosmetic reason.
 _PRODUCT_SENSOR_NAMES: dict[str, dict[str, str]] = {
     "95haDY": {  # Guardian 6000 V2 / D5 V2 - connector is owner-reported, not wire-verified
+        # attr 23 on this machine is the two XT60 inputs combined; "Solar"
+        # is the firmware's word for the MPPT input, but the total is
+        # honestly "all DC input", which is what this name now says.
+        "solar_input_power": "DC Input Total Power",
         "dc_input_1_power": "DC XT60 Power 1",
         "dc_input_2_power": "DC XT60 Power 2",
         # owner-reported sockets (a human looked; the wire never names a connector)
@@ -476,6 +491,12 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             load = total_load_w(self.coordinator.data["attrs"])
             net_in = None if gross_in is None else gross_in - (load or 0)
             return time_to_full_minutes(deficit, net_in)
+        if desc.key == "battery_status":
+            return compute_battery_status(
+                self.coordinator.product_series,
+                self.coordinator.data["attrs"],
+                self.coordinator.data.get("ext_batteries"),
+            )
         if desc.slot is not None:
             lookup = desc.data_key if desc.data_key is not None else desc.attr
             raw = self.coordinator.data["ext_batteries"].get(desc.slot, {}).get(
@@ -548,6 +569,7 @@ _WP_ONLY_SENSOR_KEYS = frozenset(
         "stored_energy_wh",
         "runtime_estimate",
         "time_to_full",
+        "battery_status",
     }
 )
 

@@ -190,3 +190,56 @@ def test_time_to_full_sensor_registered_and_gated():
     assert 'key="time_to_full"' in src
     block = src.split("_WP_ONLY_SENSOR_KEYS = frozenset")[1]
     assert '"time_to_full"' in block[: block.rindex("}")]
+
+
+# ------------------------------------------------------------ battery status
+
+from protocol import battery_status  # noqa: E402
+
+
+def test_status_matrix():
+    # charging: 2000 W in, house eats 800, net +1200
+    assert battery_status("guardian", {3: 60, 21: 2000, 4: 800}, None) == "Charging"
+    # discharging: no input, AC load 1500
+    assert battery_status("guardian", {3: 60, 21: 0, 4: 1500}, None) == "Discharging"
+    # idle: quiet on both sides
+    assert battery_status("guardian", {3: 60, 21: 0, 4: 0}, None) == "Idle"
+    # full outranks a still-warm input gauge
+    assert battery_status("guardian", {3: 100, 21: 2000, 4: 10}, None) == "Full"
+    # a pack at 99 keeps it out of Full (deficit is over ALL counted units)
+    assert battery_status("guardian", {3: 100, 21: 0, 4: 0}, _ext(99)) == "Idle"
+
+
+def test_status_refuses_when_nothing_reported_or_capacity_unknown():
+    assert battery_status("guardian", {}, {}) is None
+    assert battery_status("mega", {3: 60, 21: 0}, None) is None
+
+
+def test_status_never_contradicts_the_time_sensors():
+    """Same net-input math: if Time To Full answers a number, status must
+    say Charging; if Runtime Left answers, status must say Discharging."""
+    cases = [
+        ({3: 50, 21: 3000, 4: 500}, None),   # net +2500 -> charging, deficit > 0
+        ({3: 50, 21: 0, 4: 900}, None),      # net -900  -> discharging
+    ]
+    for attrs, ext in cases:
+        status = battery_status("guardian", attrs, ext)
+        net = attrs.get(21, 0) - total_load_w(attrs)
+        if net >= 5 and missing_energy_wh("guardian", attrs, ext) > 0:
+            assert status == "Charging"
+            assert time_to_full_minutes(missing_energy_wh("guardian", attrs, ext), net)
+        if net <= -5:
+            assert status == "Discharging"
+            assert runtime_estimate_minutes(
+                stored_energy_wh("guardian", attrs, ext), total_load_w(attrs)
+            )
+
+
+def test_battery_status_sensor_registered_and_gated():
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components" / "oupes_mega_ble" / "sensor.py"
+    ).read_text(encoding="utf-8")
+    assert 'key="battery_status"' in src
+    block = src.split("_WP_ONLY_SENSOR_KEYS = frozenset")[1]
+    assert '"battery_status"' in block[: block.rindex("}")]
