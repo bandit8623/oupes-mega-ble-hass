@@ -345,7 +345,7 @@ differently), restart, then build the card:
 ```yaml
 template:
   - sensor:
-      - name: "G6 Time To Full Text"
+      - name: "G6 Time To Full"
         unique_id: g6_time_to_full_text
         icon: mdi:timer-plus
         state: >-
@@ -358,7 +358,7 @@ template:
           {% else %}
             Not charging
           {% endif %}
-      - name: "G6 Runtime Left Text"
+      - name: "G6 Runtime Left"
         unique_id: g6_runtime_left_text
         icon: mdi:timer-sand
         state: >-
@@ -383,8 +383,8 @@ entities:
     name: Status
   - entity: sensor.basement_oupes_guardian_v2_battery_energy_stored
     name: Energy Stored
-  - entity: sensor.g6_runtime_left_text
-  - entity: sensor.g6_time_to_full_text
+  - entity: sensor.g6_runtime_left
+  - entity: sensor.g6_time_to_full
 ```
 
 The text sensors are a lens, never a replacement: automations and graphs
