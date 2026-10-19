@@ -35,6 +35,25 @@ This fork tracks
   has looked at its case. Entity IDs and history are untouched (identity
   derives from the sensor key, not the name).
 
+### Added
+
+- **Three honest battery-intelligence sensors (Guardian / D5 family).**
+  `Battery Energy Stored` (Wh) sums SoC × 4,608 Wh nameplate over the main
+  unit and every expansion pack reporting - the ceiling follows the
+  hardware as packs are added or switched off. `Estimated Runtime Left`
+  divides it by *all* measured outputs (AC + 12 V + USB-C + USB-A; dpid 4
+  alone is AC-only, proven from 170k logged packets), and `Estimated Time
+  To Full` divides the deficit by *net* charge input (dpid 21 minus live
+  load, so passthrough watts never flatter the answer). Both time sensors
+  refuse rather than lie: idle loads, already-full, net-discharging and
+  beyond-a-week horizons all report unknown - the failure mode that makes
+  the firmware's own runtime read nonsense near full charge. Series with
+  unverified nameplate capacity (Mega) get none of the three.
+- **Firmware `Remaining Runtime` demoted, not removed.** It now lives in
+  the device's Diagnostic section - still enabled, still logging history
+  for comparison - but no longer sits next to the estimate that replaced
+  it.
+
 ## 1.4.12 - 2026-10-17
 
 ### Fixed

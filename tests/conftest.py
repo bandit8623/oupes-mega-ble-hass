@@ -52,6 +52,10 @@ def _install_ha_stubs() -> None:
     )
     _stub("homeassistant.helpers.event", async_call_later=lambda *a, **k: None)
     _stub(
+        "homeassistant.helpers.entity",
+        EntityCategory=types.SimpleNamespace(CONFIG="config", DIAGNOSTIC="diagnostic"),
+    )
+    _stub(
         "homeassistant.components.bluetooth",
         async_ble_device_from_address=lambda *a, **k: None,
     )
@@ -63,7 +67,7 @@ def _install_ha_stubs() -> None:
         ),
         EVENT_HOMEASSISTANT_STOP="homeassistant_stop",
         UnitOfPower=types.SimpleNamespace(WATT="W"),
-        UnitOfEnergy=types.SimpleNamespace(KILO_WATT_HOURS="kWh"),
+        UnitOfEnergy=types.SimpleNamespace(KILO_WATT_HOURS="kWh", WATT_HOUR="Wh"),
         UnitOfElectricCurrent=types.SimpleNamespace(AMPERE="A"),
         UnitOfElectricPotential=types.SimpleNamespace(VOLT="V"),
         UnitOfTemperature=types.SimpleNamespace(CESLIUS="°C"),

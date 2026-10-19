@@ -824,3 +824,147 @@ def average_pack_soc(
     if not vals:
         return None
     return round(sum(vals) / len(vals))
+
+
+# -- Stored-energy / runtime math ---------------------------------------------
+
+# Nameplate capacity of ONE battery unit (station main body AND each G5
+# expansion pack are the same 4608 Wh on the Guardian / D5 V2 family; owner-
+# reported, and equal-capacity is how OUPES sells the stack).  Keyed by
+# series so a Mega never gets Guardian arithmetic; series absent from this
+# map means "capacity not known to us" and the derived sensors stay unknown
+# rather than inventing a number.
+WH_PER_BATTERY_UNIT: dict[str, int] = {
+    "guardian": 4608,
+}
+
+# Below this measured load an hours-remaining figure is fantasy (standby
+# draw, sensor noise, or the AC inverter idling with nothing plugged in).
+_MIN_MEANINGFUL_LOAD_W = 5.0
+# Above this the estimate is technically true and completely useless; the
+# firmware's own `remaining_runtime` going to "a crazy number" at light load
+# is exactly what this sensor exists to replace, so it refuses instead.
+_MAX_MEANINGFUL_RUNTIME_MIN = 7 * 24 * 60  # one week
+
+
+def stored_energy_wh(
+    series: str,
+    attrs: dict[int, int],
+    ext_batteries: dict[int, dict[int, int]] | None,
+) -> float | None:
+    """Sum of (SoC x nameplate Wh) over the main unit + every reporting pack.
+
+    Mirrors average_pack_soc's inclusion rules exactly: main SoC is dpid 3,
+    each slot contributes its dpid 79, silent/empty slots are skipped, a
+    reported 0% counts as real data, and None means nothing reported at all.
+    Because the same rules feed Combined Battery Reserve, the two sensors can
+    never disagree about which batteries were counted.
+    """
+    wh_unit = WH_PER_BATTERY_UNIT.get(series)
+    if wh_unit is None:
+        return None
+    total = 0.0
+    seen = False
+    main = attrs.get(3)
+    if isinstance(main, int):
+        total += wh_unit * max(0, min(100, main)) / 100
+        seen = True
+    for _slot, slot_data in (ext_batteries or {}).items():
+        soc = (slot_data or {}).get(79)
+        if isinstance(soc, int):
+            total += wh_unit * max(0, min(100, soc)) / 100
+            seen = True
+    return round(total, 1) if seen else None
+
+
+def runtime_estimate_minutes(energy_wh: float | None, load_w: object) -> float | None:
+    """Hours-and-minutes left from measured load, or None when meaningless.
+
+    energy_wh / load_w * 60 with two refusals that keep this honest where the
+    firmware sensor goes silly: a load under _MIN_MEANINGFUL_LOAD_W (idle
+    inverter) and an answer above _MAX_MEANINGFUL_RUNTIME_MIN (a week) both
+    report unknown.  A linear extrapolation assumes constant load - say so
+    in the docs, never in the number.
+    """
+    if energy_wh is None or not isinstance(load_w, (int, float)) or load_w != load_w:
+        return None  # None / NaN loads refused
+    if load_w < _MIN_MEANINGFUL_LOAD_W:
+        return None
+    minutes = energy_wh / load_w * 60
+    if minutes > _MAX_MEANINGFUL_RUNTIME_MIN:
+        return None
+    return round(minutes, 1)
+
+
+def missing_energy_wh(
+    series: str,
+    attrs: dict[int, int],
+    ext_batteries: dict[int, dict[int, int]] | None,
+) -> float | None:
+    """Headroom to full: (100 - SoC) x nameplate Wh over the same units that
+    stored_energy_wh counts (single inclusion rule for the whole family of
+    derived sensors).  0.0 means every reporting unit sits at 100%; None
+    means nothing reported / capacity unknown."""
+    wh_unit = WH_PER_BATTERY_UNIT.get(series)
+    if wh_unit is None:
+        return None
+    total = 0.0
+    seen = False
+    main = attrs.get(3)
+    if isinstance(main, int):
+        total += wh_unit * (100 - max(0, min(100, main))) / 100
+        seen = True
+    for _slot, slot_data in (ext_batteries or {}).items():
+        soc = (slot_data or {}).get(79)
+        if isinstance(soc, int):
+            total += wh_unit * (100 - max(0, min(100, soc))) / 100
+            seen = True
+    return round(total, 1) if seen else None
+
+
+def time_to_full_minutes(missing_wh: float | None, net_charge_w: object) -> float | None:
+    """Minutes of charging left at the currently measured NET charge power.
+
+    net_charge_w must already be INPUT minus OUTPUT (dpid 21 - dpid 4):
+    input power that the loads are consuming right now never reaches the
+    battery, and dividing the deficit by raw input would flatter the answer
+    exactly when the house is drawing hard.  The subtrahend also encodes
+    state for free: net < 0 means the station is DISCHARGING despite some
+    input, net ~ 0 means "accepting nothing" - both refuse below.
+    Refusals mirror runtime_estimate_minutes (idle input, >1-week horizon)
+    plus one new one: missing_wh == 0 reports unknown, because "0 minutes
+    to full" on a station that stops accepting charge at 100% is the mirror
+    image of the firmware's full-charge nonsense we just removed.
+    Linear: assumes the present net charge power persists; charge
+    efficiency and standby draw are not modelled, so real wall time runs a
+    little longer.
+    """
+    if missing_wh is None or missing_wh <= 0.0:
+        return None
+    if (
+        not isinstance(net_charge_w, (int, float))
+        or isinstance(net_charge_w, bool)
+        or net_charge_w != net_charge_w
+    ):
+        return None
+    if net_charge_w < _MIN_MEANINGFUL_LOAD_W:
+        return None
+    minutes = missing_wh / net_charge_w * 60
+    if minutes > _MAX_MEANINGFUL_RUNTIME_MIN:
+        return None
+    return round(minutes, 1)
+
+
+# Every output-power register the station reports. Proven against the
+# streaming CSV: with DC/USB loads burning 100-200 W, dpid 4 never moved
+# (170,383 packs show AC-only; 8 packs with live DC load prove the rest are
+# ADDITIVE, not reflected). Runtime math that ignores these overestimates
+# the time left whenever anyone charges a phone or runs the 12 V socket.
+_OUTPUT_POWER_DPIDS: tuple[int, ...] = (4, 6, 7, 8)  # AC, 12V, USB-C, USB-A
+
+
+def total_load_w(attrs: dict[int, int]) -> float | None:
+    """Sum of all reported output powers (W). Missing dpids count as 0;
+    None only when the station reported no output register at all."""
+    vals = [attrs[k] for k in _OUTPUT_POWER_DPIDS if isinstance(attrs.get(k), (int, float))]
+    return float(sum(vals)) if vals else None

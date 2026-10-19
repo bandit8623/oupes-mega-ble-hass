@@ -299,7 +299,10 @@ retrieved key is saved.
 | Solar Input Power | 23 | W | MPPT solar input. On Guardian / D5 V2 stations attr 23 packs both DC inputs as two uint16 halves; the sum is published here and each input appears below |
 | DC Input 1 Power | 23 (low half) | W | Guardian / D5 V2 only — power on the first DC input. Named **DC XT60 Power 1** on product `95haDY`, where the owner confirmed the sockets; `entity_id` is unchanged either way |
 | DC Input 2 Power | 23 (high half) | W | Guardian / D5 V2 only — power on the second DC input. Named **DC XT60 Power 2** on product `95haDY` |
-| Remaining Runtime | 30 | min | At current discharge rate. Clamped to the configured runtime cap (default 5940 min / 99 h) when charging or idle. |
+| Remaining Runtime | 30 | min | Firmware's own estimate. **Demoted to the Diagnostic section** — it jumps to nonsense (e.g. 5940 min) near full charge or idle load; prefer Estimated Runtime Left below. Still enabled, still logging history |
+| Battery Energy Stored | derived | Wh | Guardian family only: Σ (SoC × 4,608 Wh) over the main unit **and every expansion pack reporting this poll** — add a G5 and the ceiling rises automatically; nothing reported means unknown, never a fake number |
+| Estimated Runtime Left | derived | min | Battery Energy Stored ÷ **measured total load** (AC + 12 V + USB-C + USB-A — dpid 4 alone is AC-only, CSV-proven). Refuses instead of lying: idle load under 5 W and horizons past a week both report unknown |
+| Estimated Time To Full | derived | min | Energy deficit ÷ **net** charge input (Total Input Power dpid 21 − live load, so passthrough watts that never reach the battery don't flatter the answer). Refuses when full, idle, discharging, or beyond a week; linear, no efficiency modelled |
 | Main Unit Temperature | 32 | °F | Internal temperature (÷10; e.g. raw 963 → 96.3 °F) |
 | External Battery 1–N Runtime | 78 | min | Per battery module. Clamped to the configured runtime cap (default 5940 min / 99 h) when charging or idle. |
 | External Battery 1–N Charge | 79 | % | Direct battery percentage (raw value = %) |

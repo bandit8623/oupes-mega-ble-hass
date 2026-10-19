@@ -15,18 +15,28 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import (
     PERCENTAGE,
     UnitOfElectricPotential,
+    UnitOfEnergy,
     UnitOfPower,
     UnitOfTemperature,
     UnitOfTime,
 )
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.entity import EntityCategory
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN
 from .coordinator import OUPESMegaCoordinator
-from .protocol import ATTR_MAP, average_pack_soc
+from .protocol import (
+    ATTR_MAP,
+    average_pack_soc,
+    missing_energy_wh,
+    runtime_estimate_minutes,
+    stored_energy_wh,
+    time_to_full_minutes,
+    total_load_w,
+)
 from .const import series_from_product_id
 
 
@@ -56,6 +66,11 @@ class OUPESSensorDescription(SensorEntityDescription):
     # Override the dict key used to look up the value in coordinator.data.
     # When set, this is used instead of `attr` for the data lookup.
     data_key: str | int | None = None
+    # Re-declared so a description can ship disabled-by-default (real HA
+    # honours it via EntityDescription; our import-stub test harness needs
+    # the field to exist). True = normal. False = registered disabled,
+    # still reachable under "show disabled entities".
+    entity_registry_visible: bool = True
 
 
 # -- Main device sensors ------------------------------------------------------
@@ -79,6 +94,49 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         device_class=SensorDeviceClass.BATTERY,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=PERCENTAGE,
+    ),
+    OUPESSensorDescription(
+        # Sum of (SoC x nameplate Wh) over main + reporting packs. Same
+        # inclusion rules as battery_reserve (see protocol.stored_energy_wh),
+        # so percent and watt-hours can never disagree about what counted.
+        # WP-family only: nameplate capacity is known only for the guardian
+        # series (4608 Wh main AND per G5 pack - owner-reported; no register
+        # tells us), and this gate is what stops a Mega ever seeing it.
+        key="stored_energy_wh",
+        attr=3,
+        name="Battery Energy Stored",
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
+    ),
+    OUPESSensorDescription(
+        # Energy stored / measured load, the honest replacement for the
+        # firmware's remaining_runtime, which goes to nonsense values near
+        # full charge. protocol.runtime_estimate_minutes owns the refusals
+        # (idle load, >1-week answers report unknown instead of garbage).
+        # "Load" is EVERY output register - AC + 12V + USB-C + USB-A - not
+        # just AC (see protocol.total_load_w).
+        key="runtime_estimate",
+        attr=4,
+        name="Estimated Runtime Left",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:timer-sand",
+    ),
+    OUPESSensorDescription(
+        # Mirror sensor: minutes of charging left at the CURRENT net charge
+        # input. Net = Total Input Power (dpid 21, AC+DC combined - the
+        # "either or both" answer) minus what the outputs are eating right
+        # now, because passthrough power never reaches the battery. Refuses
+        # when full, idle, discharging, or beyond a week.
+        key="time_to_full",
+        attr=21,
+        name="Estimated Time To Full",
+        device_class=SensorDeviceClass.DURATION,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfTime.MINUTES,
+        icon="mdi:timer-plus",
     ),
     OUPESSensorDescription(
         key="total_output_power",
@@ -202,6 +260,11 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfTime.MINUTES,
         icon="mdi:timer-outline",
+        # Demoted, NOT disabled: firmware value goes to nonsense near full
+        # charge and the derived Estimated Runtime Left is the one to read,
+        # but this keeps collecting history in the device's collapsed
+        # Diagnostic section for anyone who wants to compare.
+        entity_category=EntityCategory.DIAGNOSTIC,
     ),
     OUPESSensorDescription(
         key="main_unit_temp",
@@ -388,6 +451,31 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 self.coordinator.data["attrs"],
                 self.coordinator.data.get("ext_batteries"),
             )
+        if desc.key == "stored_energy_wh":
+            return stored_energy_wh(
+                self.coordinator.product_series,
+                self.coordinator.data["attrs"],
+                self.coordinator.data.get("ext_batteries"),
+            )
+        if desc.key == "runtime_estimate":
+            energy = stored_energy_wh(
+                self.coordinator.product_series,
+                self.coordinator.data["attrs"],
+                self.coordinator.data.get("ext_batteries"),
+            )
+            return runtime_estimate_minutes(
+                energy, total_load_w(self.coordinator.data["attrs"])
+            )
+        if desc.key == "time_to_full":
+            deficit = missing_energy_wh(
+                self.coordinator.product_series,
+                self.coordinator.data["attrs"],
+                self.coordinator.data.get("ext_batteries"),
+            )
+            gross_in = self.coordinator.data["attrs"].get(21)
+            load = total_load_w(self.coordinator.data["attrs"])
+            net_in = None if gross_in is None else gross_in - (load or 0)
+            return time_to_full_minutes(deficit, net_in)
         if desc.slot is not None:
             lookup = desc.data_key if desc.data_key is not None else desc.attr
             raw = self.coordinator.data["ext_batteries"].get(desc.slot, {}).get(
@@ -454,6 +542,12 @@ _WP_ONLY_SENSOR_KEYS = frozenset(
         "dc_input_2_power",
         "dc_input_1_voltage",
         "dc_input_2_voltage",
+        # nameplate Wh is only known for the guardian series (see protocol
+        # .WH_PER_BATTERY_UNIT); a Mega would compute from a capacity we
+        # never verified, so the trio must not exist there at all
+        "stored_energy_wh",
+        "runtime_estimate",
+        "time_to_full",
     }
 )
 
