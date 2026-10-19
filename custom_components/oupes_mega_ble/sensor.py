@@ -436,6 +436,11 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
     ) -> None:
         super().__init__(coordinator)
         self.entity_description = description
+        # SensorEntity does NOT mirror description.native_unit_of_measurement
+        # into _attr_native_unit_of_measurement (unlike device_class/name -
+        # the unit property only reads the _attr). Without this line every
+        # sensor reports with no unit at all; owner-verified in 2026.10.
+        self._attr_native_unit_of_measurement = description.native_unit_of_measurement
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = _device_info(coordinator)
 
