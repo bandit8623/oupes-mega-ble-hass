@@ -504,10 +504,13 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 self.coordinator.data["attrs"],
                 self.coordinator.data.get("ext_batteries"),
             )
-            gross_in = self.coordinator.data["attrs"].get(21)
-            load = total_load_w(self.coordinator.data["attrs"])
-            net_in = None if gross_in is None else gross_in - (load or 0)
-            minutes = time_to_full_minutes(deficit, net_in)
+            # The battery's OWN charge meter (attr 24, Battery Input Power).
+            # Input power (attr 21) is capacity arriving at the inlet — it
+            # can read 4 kW while the battery takes 0 W (top balancing,
+            # bypass). Owner caught the estimate lying that way 2026-10-19;
+            # only charge power actually entering the pack may drive this.
+            charge_w = self.coordinator.data["attrs"].get(24)
+            minutes = time_to_full_minutes(deficit, charge_w)
             return None if minutes is None else round(minutes * 60)
         if desc.key == "battery_status":
             return compute_battery_status(
