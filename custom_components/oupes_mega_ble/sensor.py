@@ -107,7 +107,11 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         attr=3,
         name="Battery Energy Stored",
         device_class=SensorDeviceClass.ENERGY,
-        state_class=SensorStateClass.MEASUREMENT,
+        # NO state_class: this is a stock LEVEL, not a summable quantity.
+        # 2026 core rejects ENERGY + measurement outright (entity goes to
+        # error state); total_increasing would be a lie - the number goes
+        # DOWN as you discharge. Plain gauge: state_class stays None.
+        state_class=None,
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
     ),
     OUPESSensorDescription(
