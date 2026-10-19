@@ -333,7 +333,7 @@ _PRODUCT_SENSOR_NAMES: dict[str, dict[str, str]] = {
         # attr 23 on this machine is the two XT60 inputs combined; "Solar"
         # is the firmware's word for the MPPT input, but the total is
         # honestly "all DC input", which is what this name now says.
-        "solar_input_power": "DC Input Total Power",
+        "solar_input_power": "DC Total Input Power",
         "dc_input_1_power": "DC XT60 Power 1",
         "dc_input_2_power": "DC XT60 Power 2",
         # owner-reported sockets (a human looked; the wire never names a connector)
