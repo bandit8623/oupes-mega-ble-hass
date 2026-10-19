@@ -180,3 +180,21 @@ def test_override_names_are_bare_base_names_are_not():
     assert (a, b) == ("DC XT60 Input 1", "DC XT60 Input 2"), f"got {a!r} / {b!r}"
     for name in (a, b):
         assert not name.endswith("Power"), f"{name!r} grew a unit suffix back on"
+
+
+def test_voltage_overrides_share_the_xt60_vocabulary():
+    """`DC XT60 Voltage 1/2` must speak the same connector word as the watts.
+
+    A device page mixing 'DC Input 1 Voltage' next to 'DC XT60 Input 1' reads
+    like two unrelated port families exist on the same machine. The voltages
+    are WP-firmware-only (packed dpid 115), so `95haDY` is the sole latch here
+    too - the same owner-reported-connector constraint as the watt sensors.
+    """
+    overrides = _product_names(_tree())["95haDY"]
+    v1 = overrides.get("dc_input_1_voltage")
+    v2 = overrides.get("dc_input_2_voltage")
+    assert (v1, v2) == ("DC XT60 Voltage 1", "DC XT60 Voltage 2"), f"got {v1!r} / {v2!r}"
+    assert v1.replace("1", "#") == v2.replace("2", "#")
+    for name in (v1, v2):
+        assert "XT60" in name, f"{name!r} does not use the owner-reported connector word"
+        assert not name.endswith("Voltage"), f"{name!r} grew a redundant unit-ish suffix"
