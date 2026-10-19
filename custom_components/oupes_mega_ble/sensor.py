@@ -122,7 +122,11 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         name="Estimated Runtime Left",
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTime.MINUTES,
+        # SECONDS, not minutes: the HA frontend renders duration sensors
+        # human-readably only in its native duration unit - seconds give
+        # "11 h 3 min" on the device page, while minute-based sensors get
+        # rendered as "663m 12s" nonsense (owner-reported, verified).
+        native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:timer-sand",
     ),
     OUPESSensorDescription(
@@ -136,7 +140,7 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         name="Estimated Time To Full",
         device_class=SensorDeviceClass.DURATION,
         state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTime.MINUTES,
+        native_unit_of_measurement=UnitOfTime.SECONDS,  # see runtime_estimate
         icon="mdi:timer-plus",
     ),
     OUPESSensorDescription(
@@ -484,7 +488,8 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             # the battery. load None -> no drain evidence -> refusal inside
             # the helper; input None -> treat as 0 (nothing is coming in).
             net_drain = None if load is None else load - (gross_in or 0)
-            return runtime_estimate_minutes(energy, net_drain)
+            minutes = runtime_estimate_minutes(energy, net_drain)
+            return None if minutes is None else round(minutes * 60)
         if desc.key == "time_to_full":
             deficit = missing_energy_wh(
                 self.coordinator.product_series,
@@ -494,7 +499,8 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             gross_in = self.coordinator.data["attrs"].get(21)
             load = total_load_w(self.coordinator.data["attrs"])
             net_in = None if gross_in is None else gross_in - (load or 0)
-            return time_to_full_minutes(deficit, net_in)
+            minutes = time_to_full_minutes(deficit, net_in)
+            return None if minutes is None else round(minutes * 60)
         if desc.key == "battery_status":
             return compute_battery_status(
                 self.coordinator.product_series,

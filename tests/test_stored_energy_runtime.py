@@ -271,3 +271,17 @@ def test_runtime_branch_subtracts_input_at_runtime():
         "the battery would understate time-left, and a charging station "
         "would count down next to a Charging status"
     )
+
+
+def test_duration_sensors_emit_seconds_for_human_rendering():
+    """Device page must read '11 h 3 min'. HA only renders durations that
+    way in its native seconds unit; minute-based duration sensors get
+    mangled into '663m 12s' (owner screenshot, 2026-10-18)."""
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components" / "oupes_mega_ble" / "sensor.py"
+    ).read_text(encoding="utf-8")
+    for key in ("runtime_estimate", "time_to_full"):
+        block = src.split(f'key="{key}"')[1].split("),")[0]
+        assert "UnitOfTime.SECONDS" in block, f"{key} back to minutes -> '663m 12s'"
+    assert src.count("round(minutes * 60)") == 2, "both ETA branches must emit seconds"

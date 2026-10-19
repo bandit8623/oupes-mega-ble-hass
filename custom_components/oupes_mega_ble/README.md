@@ -332,6 +332,65 @@ retrieved key is saved.
 > integration losing contact, not a start-up that never got a reading. This is what
 > you see when the phone app is holding the connection - close it and reload.
 
+### Battery Intelligence: a human-readable card (optional)
+
+The four derived sensors (`Battery Energy Stored`, `Estimated Runtime Left`,
+`Estimated Time To Full`, `Battery Status`) are exact instruments: whole-
+second durations render as `11 h 3 min` on the device page, and the two ETA
+sensors honestly report `unknown` when the question is void (not charging /
+not discharging). If you want a card that answers in words anyway, add this
+to `configuration.yaml` (adjust the entity prefix if your device is named
+differently), restart, then build the card:
+
+```yaml
+template:
+  - sensor:
+      - name: "G6 Time To Full Text"
+        unique_id: g6_time_to_full_text
+        icon: mdi:timer-plus
+        state: >-
+          {% set s = states("sensor.basement_oupes_guardian_v2_estimated_time_to_full") %}
+          {% if s not in ("unknown", "unavailable", "None") %}
+            {% set t = s | float / 60 %}
+            {{ (t // 60) | int }} h {{ (t % 60) | round(0) | int }} min
+          {% elif is_state("sensor.basement_oupes_guardian_v2_battery_status", "Full") %}
+            Full
+          {% else %}
+            Not charging
+          {% endif %}
+      - name: "G6 Runtime Left Text"
+        unique_id: g6_runtime_left_text
+        icon: mdi:timer-sand
+        state: >-
+          {% set s = states("sensor.basement_oupes_guardian_v2_estimated_runtime_left") %}
+          {% if s not in ("unknown", "unavailable", "None") %}
+            {% set t = s | float / 60 %}
+            {% if t >= 60 %}{{ (t // 60) | int }} h {{ (t % 60) | round(0) | int }} min
+            {% else %}{{ t | round(0) | int }} min{% endif %}
+          {% else %}
+            Not discharging
+          {% endif %}
+```
+
+Card (raw configuration editor, an `entities` card):
+
+```yaml
+type: entities
+title: "\U0001F50B Battery Backup"
+hide_unavailable: true
+entities:
+  - entity: sensor.basement_oupes_guardian_v2_battery_status
+    name: Status
+  - entity: sensor.basement_oupes_guardian_v2_battery_energy_stored
+    name: Energy Stored
+  - entity: sensor.g6_runtime_left_text
+  - entity: sensor.g6_time_to_full_text
+```
+
+The text sensors are a lens, never a replacement: automations and graphs
+should still use the numeric entities (e.g. `numeric_state < 10800` seconds
+for "under three hours of backup").
+
 ### Binary Sensors (on/off)
 
 | Entity | Attr | Notes |
