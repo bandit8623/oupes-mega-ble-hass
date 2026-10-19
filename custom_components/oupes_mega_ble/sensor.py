@@ -492,12 +492,11 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 self.coordinator.data.get("ext_batteries"),
             )
             load = total_load_w(self.coordinator.data["attrs"])
-            gross_in = self.coordinator.data["attrs"].get(21)
-            # NET battery drain: solar/grid feeding the house never leaves
-            # the battery. load None -> no drain evidence -> refusal inside
-            # the helper; input None -> treat as 0 (nothing is coming in).
-            net_drain = None if load is None else load - (gross_in or 0)
-            minutes = runtime_estimate_minutes(energy, net_drain)
+            # TOTAL load, not net drain: the number answers "if the input
+            # stopped right now, how long does the house run?" — which is
+            # meaningful while charging too, and the owner wants a time
+            # always, not a refusal. Owner decision 2026-10-19.
+            minutes = runtime_estimate_minutes(energy, load)
             return None if minutes is None else round(minutes * 60)
         if desc.key == "time_to_full":
             deficit = missing_energy_wh(

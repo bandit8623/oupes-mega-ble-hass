@@ -258,18 +258,23 @@ def test_runtime_uses_net_drain_not_gross_load():
     assert runtime_estimate_minutes(full, 800 - 800) is None    # PV covers house
 
 
-def test_runtime_branch_subtracts_input_at_runtime():
-    """The subtraction must live in the sensor branch, not just the helper
-    - a helper that trusts its caller is a helper waiting to be lied to."""
+def test_runtime_branch_answers_the_owners_question():
+    """POLICY (owner, 2026-10-19): Runtime Left = stored Wh / TOTAL load —
+    'if the input stopped right now, how long does the house run?' It must
+    answer in every state, charging included; a number that vanishes next
+    to a Charging status read as a malfunction. Do NOT reintroduce net-drain
+    subtraction here without the owner asking for it."""
     src = (
         Path(__file__).resolve().parents[1]
         / "custom_components" / "oupes_mega_ble" / "sensor.py"
     ).read_text(encoding="utf-8")
     branch = src.split('desc.key == "runtime_estimate"')[1].split("if desc.key")[0]
-    assert "gross_in" in branch and "net_drain" in branch, (
-        "runtime branch divides by gross load again: solar that never leaves "
-        "the battery would understate time-left, and a charging station "
-        "would count down next to a Charging status"
+    assert "runtime_estimate_minutes(energy, load)" in branch, (
+        "runtime branch must divide by total load (blackout-time semantics)"
+    )
+    assert "net_drain" not in branch, (
+        "net-drain subtraction was removed by owner decision; the question "
+        "is 'how long would this battery last', not 'how fast is it falling'"
     )
 
 
