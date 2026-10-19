@@ -8,6 +8,24 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.13 - 2026-10-19
+
+### Fixed
+
+- **Home Assistant can no longer be frozen by an unreachable station.**
+  Config-entry setup used to await the first BLE poll with no deadline;
+  when a proxy held a stale session the poll looped forever, bootstrap
+  parked on "Waiting for integrations to complete setup", and the entire
+  dashboard - including the automations meant to alert on it - never
+  loaded. The first poll now gets a 90-second cap; past that the entry
+  defers with `ConfigEntryNotReady`, HA finishes booting normally, and
+  the integration retries in the background.
+- **Debug CSV logging never touches the event loop.** All attr/raw log
+  writes moved to Home Assistant's executor via a single `_csv_append`
+  helper; file headers are created lazily on first write instead of at
+  coordinator construction. HA 2026 was logging blocking-file-open
+  warnings against the old code path.
+
 ## 1.4.12 - 2026-10-17
 
 ### Fixed

@@ -97,15 +97,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         runtime_max_minutes=runtime_max,
     )
 
-    # Perform the first refresh; raises ConfigEntryNotReady if the device
-    # is out of range so HA will retry setup automatically.
+    # Perform the first refresh, but HARD-CAPPED. The coordinator retries
+    # BLE internally ("reconnecting in 30s"), so on a wedged proxy the first
+    # refresh never returns - which previously froze HA bootstrap ("Waiting
+    # for integrations to complete setup") and left the whole UI unloading,
+    # including the automations meant to alert on it. If we can't get one
+    # good poll inside the cap, defer via ConfigEntryNotReady: HA retries the
+    # entry in the background while boot completes and the rest of the
+    # instance stays usable. 2026-10-18 "frozen dashboard" incident.
+    _FIRST_REFRESH_TIMEOUT = 90  # seconds
     try:
-        await coordinator.async_config_entry_first_refresh()
+        await asyncio.wait_for(
+            coordinator.async_config_entry_first_refresh(),
+            timeout=_FIRST_REFRESH_TIMEOUT,
+        )
     except asyncio.CancelledError:
         # Normal during reload/shutdown - let it propagate so HA can finish.
         # Converting this to ConfigEntryNotReady was observed holding the
         # reload task past HA's final-write stage at shutdown.
         raise
+    except asyncio.TimeoutError as exc:
+        # Release any half-open GATT link before deferring, so the retry
+        # (and every other BLE client) isn't starved by a lingering session.
+        try:
+            await asyncio.wait_for(coordinator.async_shutdown(), timeout=10)
+        except Exception:  # noqa: BLE001 - best-effort cleanup only
+            _LOGGER.debug("OUPES: shutdown cleanup after first-refresh timeout failed", exc_info=True)
+        raise ConfigEntryNotReady(
+            f"OUPES Mega {address}: first BLE poll did not complete within "
+            f"{_FIRST_REFRESH_TIMEOUT}s (proxy likely wedged or device out of "
+            "range); deferring setup so Home Assistant boot is not blocked."
+        ) from exc
     except Exception as exc:
         raise ConfigEntryNotReady(
             f"Could not connect to OUPES Mega {address}: {exc}"

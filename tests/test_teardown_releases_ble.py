@@ -76,7 +76,7 @@ def test_setup_cancellation_propagates():
     """Swallowing setup cancellation into ConfigEntryNotReady held a reload
     task past HA's final-write stage during shutdown (observed in logs)."""
     m = re.search(
-        r"await coordinator\.async_config_entry_first_refresh\(\)\s*\n"
+        r"asyncio\.wait_for\(\s*coordinator\.async_config_entry_first_refresh\(\),?\s*timeout=[^)]*\)\s*\n"
         r"\s*except asyncio\.CancelledError:\s*\n\s*(?:#[^\n]*\n\s*)*raise\b",
         INIT,
     )

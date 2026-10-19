@@ -152,35 +152,57 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         self._runtime_max_minutes = runtime_max_minutes
         self._attr_csv_path: Path | None = None
         self._raw_csv_path: Path | None = None
+        # Filesystem work is NOT done here (v1.4.13): opening files in the
+        # constructor blocked the event loop during config-entry setup and
+        # HA 2026 flags that loudly; headers are written lazily by
+        # _csv_append() on the first actual write, off the loop.
         if debug_attrs or debug_raw:
-            self._init_debug_files()
+            safe_addr = self.address.replace(":", "")
+            config_dir = Path(self.hass.config.config_dir)
+            if debug_attrs:
+                self._attr_csv_path = config_dir / f"oupes_mega_ble_{safe_addr}_attrs.csv"
+                _LOGGER.info("OUPES debug: attr log → %s", self._attr_csv_path)
+            if debug_raw:
+                self._raw_csv_path = config_dir / f"oupes_mega_ble_{safe_addr}_raw.csv"
+                _LOGGER.info("OUPES debug: raw log → %s", self._raw_csv_path)
 
-    def _init_debug_files(self) -> None:
-        """Create/open debug CSV files in the HA config directory."""
-        safe_addr = self.address.replace(":", "")
-        config_dir = Path(self.hass.config.config_dir)
-        if self._debug_attrs:
-            path = config_dir / f"oupes_mega_ble_{safe_addr}_attrs.csv"
-            is_new = not path.exists()
-            self._attr_csv_path = path
-            with path.open("a", newline="", encoding="utf-8") as f:
-                if is_new:
-                    csv.writer(f).writerow(
-                        ["timestamp", "dir", "cmd", "pkt_idx", "last",
-                         "attr", "attr_hex", "value", "known",
-                         "slot", "soc", "grid_w", "note"]
-                    )
-            _LOGGER.info("OUPES debug: attr log → %s", path)
-        if self._debug_raw:
-            path = config_dir / f"oupes_mega_ble_{safe_addr}_raw.csv"
-            is_new = not path.exists()
-            self._raw_csv_path = path
-            with path.open("a", newline="", encoding="utf-8") as f:
-                if is_new:
-                    csv.writer(f).writerow(
-                        ["timestamp", "dir", "cmd", "pkt_idx", "last", "hex"]
-                    )
-            _LOGGER.info("OUPES debug: raw log → %s", path)
+    _ATTR_CSV_HEADER = [
+        "timestamp", "dir", "cmd", "pkt_idx", "last",
+        "attr", "attr_hex", "value", "known",
+        "slot", "soc", "grid_w", "note",
+    ]
+    _RAW_CSV_HEADER = ["timestamp", "dir", "cmd", "pkt_idx", "last", "hex"]
+
+    def _csv_append(self, path: "Path | None", rows: list[list]) -> None:
+        """Append rows to a debug CSV off the event loop (fire-and-forget).
+
+        Debug logging must never block or fail the BLE pipeline, and must
+        never touch the event loop (HA 2026 blocking-call detection).
+        Concurrent writes may interleave; acceptable for debug logs.
+        """
+        if path is None or not rows:
+            return
+        header = (
+            self._ATTR_CSV_HEADER
+            if "_attrs" in path.name
+            else self._RAW_CSV_HEADER
+        )
+
+        def _write() -> None:
+            try:
+                is_new = not path.exists()
+                with path.open("a", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    if is_new:
+                        writer.writerow(header)
+                    writer.writerows(rows)
+            except OSError as exc:
+                _LOGGER.debug("OUPES CSV write error: %s", exc)
+
+        try:
+            self.hass.async_add_executor_job(_write)
+        except Exception:  # noqa: BLE001 - e.g. loop shutting down; drop the row
+            pass
 
     @staticmethod
     def _classify_packet(data: bytearray) -> tuple[str, int, bool]:
@@ -205,11 +227,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             return
         ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
         cmd = label or "tx"
-        try:
-            with self._raw_csv_path.open("a", newline="", encoding="utf-8") as f:
-                csv.writer(f).writerow([ts, "TX", cmd, "", "", pkt.hex()])
-        except OSError:
-            pass
+        self._csv_append(self._raw_csv_path, [[ts, "TX", cmd, "", "", pkt.hex()]])
 
     def _debug_log_packet(
         self,
@@ -226,14 +244,10 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         cmd, pkt_index, is_last = self._classify_packet(raw)
 
         if not raw_logged and self._debug_raw and self._raw_csv_path:
-            try:
-                with self._raw_csv_path.open("a", newline="", encoding="utf-8") as f:
-                    csv.writer(f).writerow([
-                        ts, "RX", cmd, pkt_index,
-                        "Y" if is_last else "N", raw.hex(),
-                    ])
-            except OSError as exc:
-                _LOGGER.debug("OUPES raw CSV write error: %s", exc)
+            self._csv_append(self._raw_csv_path, [[
+                ts, "RX", cmd, pkt_index,
+                "Y" if is_last else "N", raw.hex(),
+            ]])
 
         if self._debug_attrs and self._attr_csv_path:
             rows = []
@@ -257,12 +271,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                     grid_w,
                     note,
                 ])
-            if rows:
-                try:
-                    with self._attr_csv_path.open("a", newline="", encoding="utf-8") as f:
-                        csv.writer(f).writerows(rows)
-                except OSError as exc:
-                    _LOGGER.debug("OUPES attr CSV write error: %s", exc)
+            self._csv_append(self._attr_csv_path, rows)
 
     # -- Public coordinator interface -----------------------------------------
 
@@ -527,16 +536,10 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             if self._debug_raw and self._raw_csv_path:
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 cmd, pi, il = self._classify_packet(raw)
-                try:
-                    with self._raw_csv_path.open(
-                        "a", newline="", encoding="utf-8"
-                    ) as f:
-                        csv.writer(f).writerow([
-                            ts, "RX", cmd, pi,
-                            "Y" if il else "N", raw.hex(),
-                        ])
-                except OSError:
-                    pass
+                self._csv_append(self._raw_csv_path, [[
+                    ts, "RX", cmd, pi,
+                    "Y" if il else "N", raw.hex(),
+                ]])
 
             # Multi-packet reassembly: new idx-0 flushes any prior buffer
             if pkt_index == 0:
@@ -775,16 +778,10 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             if self._debug_raw and self._raw_csv_path:
                 ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]
                 cmd, pi, il = self._classify_packet(raw)
-                try:
-                    with self._raw_csv_path.open(
-                        "a", newline="", encoding="utf-8"
-                    ) as f:
-                        csv.writer(f).writerow([
-                            ts, "RX", cmd, pi,
-                            "Y" if il else "N", raw.hex(),
-                        ])
-                except OSError:
-                    pass
+                self._csv_append(self._raw_csv_path, [[
+                    ts, "RX", cmd, pi,
+                    "Y" if il else "N", raw.hex(),
+                ]])
 
             # Multi-packet reassembly: new idx-0 flushes any prior buffer
             if pkt_index == 0:
