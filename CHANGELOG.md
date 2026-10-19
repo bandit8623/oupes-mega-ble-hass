@@ -26,14 +26,14 @@ This fork tracks
   coordinator construction. HA 2026 was logging blocking-file-open
   warnings against the old code path.
 
-- **Guardian 6000 V2 / D5 V2 DC voltage sensors are named for the connector
-  the owner actually has.** The dpid-115 voltage sensors (shipped since
-  v1.4.9) read "DC Input 1/2 Voltage"; on `95haDY` they are now **DC XT60
-  Voltage 1/2**, matching the "DC XT60 Input 1/2" watt sensors so one device
-  page no longer implies two port families. Other models keep the generic
-  names - no product ID gets a connector name unless someone has looked at
-  its case. Entity IDs and history are untouched (identity derives from the
-  sensor key, not the name).
+- **Guardian 6000 V2 / D5 V2 DC sensors are named for the connector the
+  owner actually has.** On `95haDY` the DC input sensors now read **DC XT60
+  Power 1/2** (was "DC XT60 Input 1/2") and **DC XT60 Voltage 1/2** (was
+  "DC Input 1/2 Voltage", renamed when dpid 115 shipped in v1.4.9) - one
+  consistent vocabulary per device page. Other models keep the generic
+  "DC Input …" names: no product ID gets a connector name unless someone
+  has looked at its case. Entity IDs and history are untouched (identity
+  derives from the sensor key, not the name).
 
 ## 1.4.12 - 2026-10-17
 

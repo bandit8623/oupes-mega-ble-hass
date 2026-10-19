@@ -469,11 +469,12 @@ people ask about:
   simply night-time. The only promise the split makes is
   `solar_input_power == dc_input_1_power + dc_input_2_power`.
   Naming note: on product `95haDY` — the model whose owner reported those sockets as
-  XT60 — the **display** names are now "DC XT60 Input 1" and "DC XT60 Input 2", bare of a
+  XT60 — the **display** names are now "DC XT60 Power 1" and "DC XT60 Power 2" (and
+  "DC XT60 Voltage 1" / "DC XT60 Voltage 2" for the dpid-115 voltages), bare of a
   unit suffix because the watt unit is already on the reading. `unique_id` is built from the sensor key, not the name, so
   an existing install keeps `sensor.<device>_dc_input_1_power` and all of its history —
   only the friendly name changes. A **fresh** install names the entity from the new string,
-  so expect `sensor.<device>_dc_xt60_input_1` — Home Assistant generates that slug
+  so expect `sensor.<device>_dc_xt60_power_1` — Home Assistant generates that slug
   and it is unverified on a second unit. Copy entity ids out of your own HA rather than out
   of this document.
 * `expansion_battery_count` — counted from the packs that actually reported telemetry

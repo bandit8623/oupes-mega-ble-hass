@@ -177,7 +177,7 @@ def test_override_names_are_bare_base_names_are_not():
     a = overrides["dc_input_1_power"]
     b = overrides["dc_input_2_power"]
     assert a.replace("1", "#") == b.replace("2", "#"), f"names do not match: {a!r} / {b!r}"
-    assert (a, b) == ("DC XT60 Input 1", "DC XT60 Input 2"), f"got {a!r} / {b!r}"
+    assert (a, b) == ("DC XT60 Power 1", "DC XT60 Power 2"), f"got {a!r} / {b!r}"
     for name in (a, b):
         assert not name.endswith("Power"), f"{name!r} grew a unit suffix back on"
 

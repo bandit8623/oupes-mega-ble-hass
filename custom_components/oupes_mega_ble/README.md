@@ -63,7 +63,7 @@ the Mega family in three ways that matter here:
    DC inputs** as two little-endian uint16 halves, low half first, so decoding it
    as a single uint32 gives roughly 131,000,000 W. The sum stays published as
    **Solar Input Power** (attr 23) and each input appears separately. On the Guardian
-   6000 V2 / D5 V2 they are named **DC XT60 Input 1** and **DC XT60 Input 2**
+   6000 V2 / D5 V2 they are named **DC XT60 Power 1** and **DC XT60 Power 2**
    — an owner-reported connector name, see the caveat below — and on any other model
    **DC Input 1 Power** / **DC Input 2 Power**, because nobody has confirmed those
    sockets. Two things to know about them.
@@ -297,8 +297,8 @@ retrieved key is saved.
 | Total Input Power | 21 | W | Grid + solar combined |
 | Grid Input Power | 22 | W | Grid only |
 | Solar Input Power | 23 | W | MPPT solar input. On Guardian / D5 V2 stations attr 23 packs both DC inputs as two uint16 halves; the sum is published here and each input appears below |
-| DC Input 1 Power | 23 (low half) | W | Guardian / D5 V2 only — power on the first DC input. Named **DC XT60 Input 1** on product `95haDY`, where the owner confirmed the sockets; `entity_id` is unchanged either way |
-| DC Input 2 Power | 23 (high half) | W | Guardian / D5 V2 only — power on the second DC input. Named **DC XT60 Input 2** on product `95haDY` |
+| DC Input 1 Power | 23 (low half) | W | Guardian / D5 V2 only — power on the first DC input. Named **DC XT60 Power 1** on product `95haDY`, where the owner confirmed the sockets; `entity_id` is unchanged either way |
+| DC Input 2 Power | 23 (high half) | W | Guardian / D5 V2 only — power on the second DC input. Named **DC XT60 Power 2** on product `95haDY` |
 | Remaining Runtime | 30 | min | At current discharge rate. Clamped to the configured runtime cap (default 5940 min / 99 h) when charging or idle. |
 | Main Unit Temperature | 32 | °F | Internal temperature (÷10; e.g. raw 963 → 96.3 °F) |
 | External Battery 1–N Runtime | 78 | min | Per battery module. Clamped to the configured runtime cap (default 5940 min / 99 h) when charging or idle. |

@@ -248,8 +248,8 @@ _CAR_PORT_POWER_NAMES: dict[str, str] = {
 # them would move entity_ids on stations nobody has inspected, for a cosmetic reason.
 _PRODUCT_SENSOR_NAMES: dict[str, dict[str, str]] = {
     "95haDY": {  # Guardian 6000 V2 / D5 V2 - connector is owner-reported, not wire-verified
-        "dc_input_1_power": "DC XT60 Input 1",
-        "dc_input_2_power": "DC XT60 Input 2",
+        "dc_input_1_power": "DC XT60 Power 1",
+        "dc_input_2_power": "DC XT60 Power 2",
         # owner-reported sockets (a human looked; the wire never names a connector)
         "dc_input_1_voltage": "DC XT60 Voltage 1",
         "dc_input_2_voltage": "DC XT60 Voltage 2",
