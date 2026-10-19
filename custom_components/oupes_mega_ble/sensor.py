@@ -514,7 +514,10 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             ext_in = 0.0
             any_ext = False
             for ed in exts.values():
-                w = ed.get("input_power")
+                # Raw slot dicts are keyed by firmware attr numbers: 53 is
+                # the pack's INPUT W (string keys like "input_power" live
+                # only in sensor descriptions, never in these dicts).
+                w = ed.get(53)
                 if isinstance(w, (int, float)) and not isinstance(w, bool):
                     ext_in += w
                     any_ext = True
