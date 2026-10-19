@@ -478,9 +478,13 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 self.coordinator.data["attrs"],
                 self.coordinator.data.get("ext_batteries"),
             )
-            return runtime_estimate_minutes(
-                energy, total_load_w(self.coordinator.data["attrs"])
-            )
+            load = total_load_w(self.coordinator.data["attrs"])
+            gross_in = self.coordinator.data["attrs"].get(21)
+            # NET battery drain: solar/grid feeding the house never leaves
+            # the battery. load None -> no drain evidence -> refusal inside
+            # the helper; input None -> treat as 0 (nothing is coming in).
+            net_drain = None if load is None else load - (gross_in or 0)
+            return runtime_estimate_minutes(energy, net_drain)
         if desc.key == "time_to_full":
             deficit = missing_energy_wh(
                 self.coordinator.product_series,

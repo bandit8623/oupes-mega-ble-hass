@@ -41,7 +41,7 @@ This fork tracks
   `Battery Energy Stored` (Wh) sums SoC × 4,608 Wh nameplate over the main
   unit and every expansion pack reporting - the ceiling follows the
   hardware as packs are added or switched off. `Estimated Runtime Left`
-  divides it by *all* measured outputs (AC + 12 V + USB-C + USB-A; dpid 4
+  divides it by the **net battery drain** - all measured outputs (AC + 12 V + USB-C + USB-A; dpid 4
   alone is AC-only, proven from 170k logged packets), and `Estimated Time
   To Full` divides the deficit by *net* charge input (dpid 21 minus live
   load, so passthrough watts never flatter the answer). Both time sensors

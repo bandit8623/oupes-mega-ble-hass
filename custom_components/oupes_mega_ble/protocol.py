@@ -877,20 +877,25 @@ def stored_energy_wh(
     return round(total, 1) if seen else None
 
 
-def runtime_estimate_minutes(energy_wh: float | None, load_w: object) -> float | None:
-    """Hours-and-minutes left from measured load, or None when meaningless.
+def runtime_estimate_minutes(energy_wh: float | None, net_drain_w: object) -> float | None:
+    """Hours-and-minutes left from the measured NET battery drain, or None
+    when meaningless.
 
-    energy_wh / load_w * 60 with two refusals that keep this honest where the
-    firmware sensor goes silly: a load under _MIN_MEANINGFUL_LOAD_W (idle
-    inverter) and an answer above _MAX_MEANINGFUL_RUNTIME_MIN (a week) both
-    report unknown.  A linear extrapolation assumes constant load - say so
-    in the docs, never in the number.
+    net_drain_w must already be OUTPUT minus INPUT (dpid 21 - dpid 4/6/7/8):
+    solar watts feeding the house never leave the battery, and dividing by
+    the gross load would understate the time left exactly when the PV is
+    producing.  The subtraction encodes state for free - net <= 0 means the
+    battery is not being drained at all (station charging or idle) and the
+    question itself is void, mirroring time_to_full_minutes.
+    Refusals: idle drain under _MIN_MEANINGFUL_LOAD_W and answers above
+    _MAX_MEANINGFUL_RUNTIME_MIN report unknown - a linear extrapolation
+    assumes constant net drain, say so in the docs, never in the number.
     """
-    if energy_wh is None or not isinstance(load_w, (int, float)) or load_w != load_w:
-        return None  # None / NaN loads refused
-    if load_w < _MIN_MEANINGFUL_LOAD_W:
+    if energy_wh is None or not isinstance(net_drain_w, (int, float)) or isinstance(net_drain_w, bool) or net_drain_w != net_drain_w:
+        return None  # None / NaN / bool drains refused
+    if net_drain_w < _MIN_MEANINGFUL_LOAD_W:
         return None
-    minutes = energy_wh / load_w * 60
+    minutes = energy_wh / net_drain_w * 60
     if minutes > _MAX_MEANINGFUL_RUNTIME_MIN:
         return None
     return round(minutes, 1)

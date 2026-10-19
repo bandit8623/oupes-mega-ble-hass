@@ -243,3 +243,31 @@ def test_battery_status_sensor_registered_and_gated():
     assert 'key="battery_status"' in src
     block = src.split("_WP_ONLY_SENSOR_KEYS = frozenset")[1]
     assert '"battery_status"' in block[: block.rindex("}")]
+
+
+# ------------------------- runtime must use NET drain (house > charge case)
+
+def test_runtime_uses_net_drain_not_gross_load():
+    """Solar 1000 W into a 1500 W house: battery loses ~500 W, not 1500.
+    Dividing by gross load would understate the time left 3x. And when PV
+    covers the house outright the question is void -> refuse, never count
+    down while `Battery Status` says Charging."""
+    full = 4 * UNIT
+    assert runtime_estimate_minutes(full, 1500 - 1000) == round(full / 500 * 60, 1)
+    assert runtime_estimate_minutes(full, 500 - 2000) is None   # net charging
+    assert runtime_estimate_minutes(full, 800 - 800) is None    # PV covers house
+
+
+def test_runtime_branch_subtracts_input_at_runtime():
+    """The subtraction must live in the sensor branch, not just the helper
+    - a helper that trusts its caller is a helper waiting to be lied to."""
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components" / "oupes_mega_ble" / "sensor.py"
+    ).read_text(encoding="utf-8")
+    branch = src.split('desc.key == "runtime_estimate"')[1].split("if desc.key")[0]
+    assert "gross_in" in branch and "net_drain" in branch, (
+        "runtime branch divides by gross load again: solar that never leaves "
+        "the battery would understate time-left, and a charging station "
+        "would count down next to a Charging status"
+    )
