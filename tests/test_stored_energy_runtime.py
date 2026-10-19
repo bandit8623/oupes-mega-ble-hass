@@ -292,14 +292,24 @@ def test_duration_sensors_emit_seconds_for_human_rendering():
     assert src.count("round(minutes * 60)") == 2, "both ETA branches must emit seconds"
 
 
-def test_stored_energy_is_a_gauge_not_a_total():
-    """2026 core hard-rejects ENERGY device_class + MEASUREMENT state_class.
+def test_stored_energy_is_a_total_not_a_bare_gauge():
+    """Stored energy is a LEVEL: rises charging, falls discharging.
 
-    Stored energy is a LEVEL (it falls on discharge), so total_increasing
-    would corrupt long-term statistics. state_class must be None.
+    Policy history (do not re-litigate by trial and error - the repair floor
+    keeps the receipts):
+      MEASUREMENT  -> 2026 core rejects ENERGY+measurement, entity errored.
+      None (v1.4.13) -> LTS that already existed got orphaned; core raised
+                        'entity no longer has a state class' as a repair issue.
+      TOTAL        -> correct: summable but NON-monotonic; LTS resumes and
+                      the energy dashboard treats it as a storage quantity.
+    Guards: measurement would have errored at registration; total_increasing
+    would lie (and clamp/reset-loop on every discharge).
     """
+    from homeassistant.components.sensor import SensorStateClass
     from custom_components.oupes_mega_ble.sensor import SENSOR_DESCRIPTIONS
     desc = next(d for d in SENSOR_DESCRIPTIONS if d.key == "stored_energy_wh")
-    assert desc.state_class is None, (
-        "stored energy is a gauge; never give it a summable state class"
+    assert desc.state_class is SensorStateClass.TOTAL, (
+        "stored energy must be TOTAL: None orphans existing statistics "
+        "(repair floor issue) and MEASUREMENT/TOTAL_INCREASING are rejected "
+        "or dishonest for a battery level"
     )

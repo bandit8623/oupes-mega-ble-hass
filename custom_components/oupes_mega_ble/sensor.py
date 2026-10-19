@@ -107,11 +107,15 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         attr=3,
         name="Battery Energy Stored",
         device_class=SensorDeviceClass.ENERGY,
-        # NO state_class: this is a stock LEVEL, not a summable quantity.
-        # 2026 core rejects ENERGY + measurement outright (entity goes to
-        # error state); total_increasing would be a lie - the number goes
-        # DOWN as you discharge. Plain gauge: state_class stays None.
-        state_class=None,
+        # state_class=TOTAL: this is a stock LEVEL (goes up AND down), which
+        # is exactly what TOTAL means in 2026 core - non-monotonic summable.
+        # HISTORY: shipped once with MEASUREMENT (ENERGY+measurement was later
+        # rejected by core), then demoted to None in v1.4.13 - which orphaned
+        # the statistics already recorded and tripped the core repair floor
+        # ("entity no longer has a state class"). TOTAL is the landing spot:
+        # LTS resumes, energy-dashboard storage semantics, no lie about
+        # monotonicity. Do not set it back to None while history exists.
+        state_class=SensorStateClass.TOTAL,
         native_unit_of_measurement=UnitOfEnergy.WATT_HOUR,
     ),
     OUPESSensorDescription(
