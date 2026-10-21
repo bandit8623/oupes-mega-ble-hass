@@ -389,10 +389,19 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         self._continuous_task = None
 
     def _record_soc(self, data: OUPESData) -> None:
-        """Keep (monotonic_ts, main-pack SoC) for protocol.soc_slope_w."""
+        """Keep (monotonic_ts, main-pack SoC) for protocol.soc_slope_w.
+
+        Throttled to ~1 sample/30s: live push runs every 1-2s, and an
+        unthrottled deque(maxlen=240) would hold only minutes of history -
+        less than soc_slope_w's 10-minute minimum span, so the fallback
+        would silently never arm.  240 x 30s = 2h of slope history.
+        """
         soc = (data.get("attrs") or {}).get(3)
         if isinstance(soc, int):
-            self.soc_samples.append((_time.monotonic(), soc))
+            now = _time.monotonic()
+            if self.soc_samples and now - self.soc_samples[-1][0] < 30.0:
+                return
+            self.soc_samples.append((now, soc))
 
     async def _run_continuous_connection(self) -> None:
         """Loop: connect -> run indefinitely -> reconnect after disconnect/error."""

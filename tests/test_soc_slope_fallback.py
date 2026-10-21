@@ -80,7 +80,6 @@ def test_sensor_layer_wires_the_fallback_into_time_to_full():
     src = (Path(__file__).resolve().parents[1] / "custom_components" /
            "oupes_mega_ble" / "sensor.py").read_text(encoding="utf-8")
     assert "soc_slope_w(" in src
-    gate = src[src.index("def ") and src.index("time_to_full"):]
     seg = src[src.index("ext_in > 0 and ("):src.index("charge_w += slope")]
     assert "soc_slope_w" in seg and "soc_samples" in seg
 
@@ -90,3 +89,14 @@ def test_coordinator_keeps_the_sample_history():
            "oupes_mega_ble" / "coordinator.py").read_text(encoding="utf-8")
     assert "soc_samples" in src
     assert "_record_soc" in src
+
+
+def test_sample_history_is_throttled_to_outrun_the_deque():
+    """Regression: live push is 1-2s; an unthrottled deque(240) holds <10 min
+    and soc_slope_w's minimum span never arms (observed live 2026-10-21:
+    ETA stayed at the externals-only value through a whole charge climb).
+    Recording must be throttled so 240 samples span well past 10 minutes."""
+    src = (Path(__file__).resolve().parents[1] / "custom_components" /
+           "oupes_mega_ble" / "coordinator.py").read_text(encoding="utf-8")
+    seg = src[src.index("def _record_soc"):src.index("def _record_soc") + 1200]
+    assert "< 30.0" in seg, "_record_soc must throttle sampling or history starves"
