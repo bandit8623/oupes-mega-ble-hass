@@ -14,7 +14,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components" / "oupes_mega_ble"))
 
 import protocol  # noqa: E402
-from protocol import soc_slope_w  # noqa: E402
+from protocol import (  # noqa: E402
+    missing_energy_wh,
+    soc_slope_w,
+    time_to_full_minutes,
+)
 
 UNIT = 4608
 
@@ -75,13 +79,45 @@ def test_bool_soc_is_not_a_percentage():
 
 def test_sensor_layer_wires_the_fallback_into_time_to_full():
     """The register-0 case is detected at the ETA site, not inside the math:
-    sensor.py must add the slope only while externals prove a real charge
-    window and dpid 24 reports <= 0."""
+    sensor.py must add the slope only while real charging is evidenced
+    (external watts OR net input) and dpid 24 reports <= 0."""
     src = (Path(__file__).resolve().parents[1] / "custom_components" /
            "oupes_mega_ble" / "sensor.py").read_text(encoding="utf-8")
     assert "soc_slope_w(" in src
-    seg = src[src.index("ext_in > 0 and ("):src.index("charge_w += slope")]
+    seg = src[src.index("if charge_w is not None and ("):src.index("charge_w += slope")]
     assert "soc_slope_w" in seg and "soc_samples" in seg
+    assert "ext_in > 0 or net_input_w > 0" in seg
+
+
+def test_fallback_scales_to_any_rack_size_main_unit_counted_once():
+    """Every OUPES install has exactly ONE main unit (dpid 3 / dpid 24) and
+    any number of external packs.  The deficit side already loops the slots
+    (test_battery_average covers 0-8 packs); here prove the slope side is
+    rack-independent: soc_slope_w never sees ext_batteries, and the ETA site
+    adds it exactly once regardless of how many externals exist."""
+    for packs in (0, 1, 3, 6, 8):
+        ext = {i + 1: {79: 60} for i in range(packs)}
+        deficit = missing_energy_wh("guardian", {3: 60}, ext)
+        assert deficit == round((100 - 60) / 100 * UNIT * (1 + packs), 1)
+        # slope is computed from main-pack samples only - rack size cannot
+        # double-count it because dpid 3 exists exactly once per station
+        slope = soc_slope_w(_s(60, 62), UNIT)
+        total_charge_w = packs * 500 + (slope or 0)   # sensor: Σext-in + ONE slope
+        minutes = time_to_full_minutes(deficit, total_charge_w)
+        # more packs -> bigger deficit -> longer ETA at the same per-pack rate,
+        # and the single slope never appears twice
+        if packs:
+            assert minutes > time_to_full_minutes(
+                (100 - 60) / 100 * UNIT, 500 + (slope or 0))
+    # the ETA site must add slope once, not per slot
+    src = (Path(__file__).resolve().parents[1] / "custom_components" /
+           "oupes_mega_ble" / "sensor.py").read_text(encoding="utf-8")
+    assert src.count("charge_w += slope") == 1
+    # and the coordinator records the MAIN SoC (dpid 3), which is singular
+    csrc = (Path(__file__).resolve().parents[1] / "custom_components" /
+            "oupes_mega_ble" / "coordinator.py").read_text(encoding="utf-8")
+    body = csrc[csrc.index("def _record_soc"):csrc.index("def _record_soc") + 900]
+    assert 'get("attrs") or {}).get(3)' in body
 
 
 def test_coordinator_keeps_the_sample_history():

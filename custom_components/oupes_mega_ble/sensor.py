@@ -577,9 +577,18 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             # Guardian quirk (field case 2026-10-21): the main unit's internal
             # pack input register (dpid 24) reports 0 W while solar charging
             # and its SoC climbs.  The pack's own SoC slope is the honest
-            # pack-side stand-in; requiring external charge flow gates this
-            # to real charging windows only.
-            if charge_w is not None and ext_in > 0 and (
+            # pack-side stand-in.  Gated to real charging windows: EITHER an
+            # external pack measurably accepting watts, OR net input (dpid 21
+            # - dpid 4) above zero - which is what lets a MAIN-UNIT-ONLY
+            # install (no externals at all) get the same fix.  The slope
+            # describes the one main unit exactly once, whatever the rack size.
+            net_input_w = (
+                (self.coordinator.data["attrs"].get(21) or 0)
+                - (self.coordinator.data["attrs"].get(4) or 0)
+            )
+            if charge_w is not None and (
+                ext_in > 0 or net_input_w > 0
+            ) and (
                 self.coordinator.data["attrs"].get(24) or 0
             ) <= 0:
                 slope = soc_slope_w(
