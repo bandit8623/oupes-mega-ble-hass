@@ -8,7 +8,7 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
-## [Unreleased] - v1.4.16 draft (DO NOT TAG without owner sign-off)
+## 1.4.16 - 2026-10-20
 
 ### Added
 
