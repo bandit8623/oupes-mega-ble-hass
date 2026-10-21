@@ -356,3 +356,39 @@ def test_output_only_divisor_is_the_refusal_bug():
 def test_idle_draw_never_negative_or_absurd():
     for w in protocol.AWAKE_IDLE_DRAW_W.values():
         assert 5.0 <= w <= 200.0  # plausible inverter-stage idle range
+
+
+# --------------------------------------------------------------------------
+# v1.4.16: AC Output + Inverter - measured loss curve
+# --------------------------------------------------------------------------
+from protocol import inverter_overhead_w  # noqa: E402
+
+
+def test_overhead_curve_hits_every_anchor_exactly():
+    """Anchors are measurements or owner decisions; interpolation may never
+    drift them (2026-10-20 Guardian V2; see protocol provenance comment)."""
+    for x, y in [(0, 57), (65, 57), (500, 120), (2100, 225), (4000, 450), (6000, 1059)]:
+        assert abs(inverter_overhead_w(x) - y) < 0.01, f"anchor {x} W moved"
+
+
+def test_overhead_curve_endpoints_clamp():
+    """Beyond the measured range the curve holds - no invented slope."""
+    assert inverter_overhead_w(-500) == 57.0     # floor: idle, never negative
+    assert inverter_overhead_w(99999) == 1059.0  # ceiling: 85% pin, no runaway
+
+
+def test_overhead_curve_monotonic_and_bounded():
+    """Overhead never decreases with load, and total stays physical
+    (between the register and register+2000 W anywhere on the curve)."""
+    prev = -1.0
+    for w in range(0, 6001, 25):
+        oh = inverter_overhead_w(w)
+        assert oh >= prev - 1e-9, f"overhead dipped at {w} W"
+        assert 0 <= oh <= 2000, f"overhead unphysical at {w} W: {oh}"
+        prev = oh
+
+
+def test_filter_day_reproduced_end_to_end():
+    """The 2026-10-20 ground truth: 64 W AC register -> battery paid 121 W
+    (BMS odometer route). The curve must reproduce its own origin."""
+    assert abs((64 + inverter_overhead_w(64)) - 121) < 1.0

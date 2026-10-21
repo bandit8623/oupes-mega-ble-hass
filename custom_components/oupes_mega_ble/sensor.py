@@ -38,6 +38,8 @@ from .protocol import (
     time_to_full_minutes,
     total_load_w,
     awake_idle_draw_w,
+    inverter_overhead_w,
+    OUTPUT_AC_BIT,
 )
 from .const import series_from_product_id
 
@@ -174,6 +176,21 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
         native_unit_of_measurement=UnitOfPower.WATT,
+    ),
+    OUPESSensorDescription(
+        # The battery's-eye view of the AC outlets: the register PLUS the
+        # inverter's own appetite, via the measured loss curve (protocol.
+        # inverter_overhead_w). Not a constant: inverters bleed idle watts
+        # at the floor (~53% eff at filter loads), hit ~90% mid-band, and
+        # roll off toward 85% at full tilt. AC output switched off => the
+        # raw register: an ECO-sleeping inverter has no overhead to add.
+        key="ac_power_inclusive",
+        attr=5,
+        name="AC Output + Inverter",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        icon="mdi:flash",
     ),
     OUPESSensorDescription(
         key="dc_12v_output",
@@ -487,6 +504,15 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 self.coordinator.data["attrs"],
                 self.coordinator.data.get("ext_batteries"),
             )
+        if desc.key == "ac_power_inclusive":
+            ac = self.coordinator.data["attrs"].get(5)
+            if ac is None:
+                return None
+            ac = float(ac)
+            # Bitmask attr 1 gates the overhead: switched off (or ECO-
+            # asleep with no load) the inverter is not burning idle.
+            enabled = bool(int(self.coordinator.data["attrs"].get(1, 0) or 0) & OUTPUT_AC_BIT)
+            return round(ac + inverter_overhead_w(ac)) if enabled else round(ac)
         if desc.key == "runtime_estimate":
             energy = stored_energy_wh(
                 self.coordinator.product_series,

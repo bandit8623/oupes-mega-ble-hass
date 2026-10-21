@@ -8,6 +8,23 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## [Unreleased] - v1.4.16 draft (DO NOT TAG without owner sign-off)
+
+### Added
+
+- **`AC Output + Inverter` sensor** - the AC register plus the inverter's
+  own appetite, from a piecewise loss curve anchored on measurements
+  (57 W awake-idle from the 2026-10-20 BMS no-load day; owner-observed
+  500/2100/4000 W points; 6000 W pinned at 85% efficiency by owner
+  decision). AC switched off returns the raw register; an ECO-sleeping
+  inverter has no overhead to report.
+
+### Changed
+
+- **`Estimated Time To Full` answers in words when it refuses numbers**
+  (Not charging / Full / Nearly full) and formats real durations itself.
+  Device-page `unknown` is not UX (owner rule 2026-10-20).
+
 ## 1.4.15 - 2026-10-20
 
 ### Fixed

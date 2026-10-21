@@ -1026,3 +1026,42 @@ def battery_status(
     if net <= -_MIN_MEANINGFUL_LOAD_W:
         return "Discharging"
     return "Idle"
+
+
+# --------------------------------------------------------------------------
+# Inverter loss curve (v1.4.16 "efficiency & truth" batch)
+# --------------------------------------------------------------------------
+# Overhead ABOVE the AC output register, as a function of AC output watts:
+# what the battery pays that no register shows. Anchors, in provenance
+# order (owner-measured 2026-10-20 on Guardian V2 unless noted):
+#   0 W     ->  57 W  awake-idle, BMS stored-energy odometer over an 8 h
+#                    no-load day (968 Wh drained - 514 Wh metered); the
+#                    same constant AWAKE_IDLE_DRAW_W carries for runtime.
+#   65 W    ->  57 W  same day: overhead stayed flat at idle floor.
+#   500 W   -> 120 W  owner observation (~81% eff).
+#   2100 W  -> 225 W  owner observation, sweet spot (~90% eff).
+#   4000 W  -> 450 W  owner observation (~90% eff).
+#   6000 W  -> 1059 W owner-specified 85% efficiency pin (losses roll off
+#                    past the sweet spot; a linear extension would lie).
+# Piecewise linear between anchors; clamped outside the range - an
+# unmeasured region never invents slope.
+_AC_OVERHEAD_X: tuple[float, ...] = (0.0, 65.0, 500.0, 2100.0, 4000.0, 6000.0)
+_AC_OVERHEAD_Y: tuple[float, ...] = (57.0, 57.0, 120.0, 225.0, 450.0, 1059.0)
+
+
+def inverter_overhead_w(ac_output_w: float) -> float:
+    """The inverter's own appetite at a given AC output, in watts.
+
+    Returns the overhead to ADD to the AC register to get what the battery
+    actually delivers. Clamped below 0 and above the last anchor.
+    """
+    x, y = _AC_OVERHEAD_X, _AC_OVERHEAD_Y
+    if ac_output_w <= x[0]:
+        return y[0]
+    if ac_output_w >= x[-1]:
+        return y[-1]
+    for i in range(1, len(x)):
+        if ac_output_w <= x[i]:
+            t = (ac_output_w - x[i - 1]) / (x[i] - x[i - 1])
+            return y[i - 1] + (y[i] - y[i - 1]) * t
+    return y[-1]  # pragma: no cover - loop always returns above
