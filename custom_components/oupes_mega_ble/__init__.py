@@ -82,10 +82,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "Open the integration options and enter your Cleanergy cloud "
             "email/password to auto-fetch the correct key, or enter it manually."
         )
+    # Deferred: config_flow pulls voluptuous; importing it at module level
+    # would tax every integration import (and the bare test environment)
+    # just to reuse one lookup helper.
+    from .config_flow import _extract_product_id_for_address
+
+    product_id = entry.data.get(CONF_PRODUCT_ID, "") or _extract_product_id_for_address(hass, address)
+    if product_id and not entry.data.get(CONF_PRODUCT_ID):
+        # Self-heal: persist the learned id so future reloads never depend
+        # on the scan cache being warm (owner-hit 2026-10-20: entry paired
+        # before ids were saved; all series-gated entities silently absent
+        # after a device repair + entry reload).
+        hass.config_entries.async_update_entry(
+            entry, data={**entry.data, CONF_PRODUCT_ID: product_id}
+        )
     coordinator = OUPESMegaCoordinator(
         hass, address, name,
         device_key=device_key,
-        product_id=entry.data.get(CONF_PRODUCT_ID, ""),
+        # Legacy entries paired before product_id was persisted carry ''
+        # here. Without a fallback the series resolves to unknown, and every
+        # series-gated entity (stored energy, ETAs, battery status) is
+        # silently refused at setup - owner-hit on 2026-10-20 after a
+        # device repair + reload. The live advertisement is the same source
+        # the config flow itself uses; consult it before giving up.
+        product_id=product_id,
         open_id=open_id,
         user_id=user_id,
         continuous=continuous,

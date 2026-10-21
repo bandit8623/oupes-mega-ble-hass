@@ -392,3 +392,24 @@ def test_filter_day_reproduced_end_to_end():
     """The 2026-10-20 ground truth: 64 W AC register -> battery paid 121 W
     (BMS odometer route). The curve must reproduce its own origin."""
     assert abs((64 + inverter_overhead_w(64)) - 121) < 1.0
+
+
+def test_legacy_entry_gets_product_id_from_advertisement():
+    """Owner-hit 2026-10-20: an entry paired before product_id was persisted
+    ('' in entry data) resolved series=unknown at setup, so EVERY series-
+    gated entity (stored energy, both ETAs, battery status) was silently
+    refused - they simply did not exist after reload, and HA's orphan sweep
+    made the absence permanent. Setup must fall back to the live
+    advertisement (same source the config flow trusts) and self-heal the
+    entry."""
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components" / "oupes_mega_ble" / "__init__.py"
+    ).read_text(encoding="utf-8")
+    assert "_extract_product_id_for_address(hass, address)" in src, \
+        "advertisement fallback lost - legacy entries lose all computed sensors"
+    assert "async_update_entry" in src, \
+        "self-heal lost: learned id must be persisted, not re-learned per boot"
+    # import must stay deferred (voluptuous must not ride every import)
+    head = src.split("async def ")[0]
+    assert "from .config_flow import" not in head, "config_flow import must stay lazy"

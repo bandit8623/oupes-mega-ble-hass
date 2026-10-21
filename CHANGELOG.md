@@ -19,6 +19,19 @@ This fork tracks
   decision). AC switched off returns the raw register; an ECO-sleeping
   inverter has no overhead to report.
 
+### Fixed
+
+- **A blank `product_id` no longer silently loses every computed
+  sensor.** Re-pairing a freshly power-cycled unit can discover it before
+  its advertisement carries manufacturer data - the flow then correctly
+  stores `product_id=''`, which resolves to series "unknown" at setup, so the series-gated entities (stored energy, both
+  ETAs, battery status) were refused at creation - and HA's orphan sweep
+  then deleted their registry entries permanently. Setup now falls back to
+  the live BLE advertisement (the same source the config flow trusts) and
+  self-heals the entry with the learned id. (Owner-hit 2026-10-20 after a
+  device repair + entry reload; also required an active boot scan to warm
+  the discovery cache, which is why the fallback persists what it learns.)
+
 ### Changed
 
 - **`Estimated Time To Full` answers in words when it refuses numbers**
