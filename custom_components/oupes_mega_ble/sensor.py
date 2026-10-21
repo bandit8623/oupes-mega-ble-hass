@@ -147,9 +147,6 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         key="time_to_full",
         attr=21,
         name="Estimated Time To Full",
-        device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
-        native_unit_of_measurement=UnitOfTime.SECONDS,  # see runtime_estimate
         icon="mdi:timer-plus",
     ),
     OUPESSensorDescription(
@@ -540,7 +537,22 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             else:
                 charge_w = total_charge
             minutes = time_to_full_minutes(deficit, charge_w)
-            return None if minutes is None else round(minutes * 60)
+            if minutes is None:
+                # Refusal is not silence: answer with WHY (owner rule
+                # 2026-10-20: device-page 'unknown' is not acceptable UX).
+                status = compute_battery_status(
+                    self.coordinator.product_series,
+                    self.coordinator.data["attrs"],
+                    self.coordinator.data.get("ext_batteries"),
+                )
+                if status == "Full" or (deficit is not None and deficit <= 0.0):
+                    return "Full"
+                if status == "Charging":
+                    return "Nearly full"
+                return "Not charging"
+            total = int(round(minutes))
+            h, m = divmod(total, 60)
+            return f"{h}h {m:02d}m" if h else f"{m}m"
         if desc.key == "battery_status":
             return compute_battery_status(
                 self.coordinator.product_series,

@@ -281,15 +281,33 @@ def test_runtime_branch_answers_the_owners_question():
 def test_duration_sensors_emit_seconds_for_human_rendering():
     """Device page must read '11 h 3 min'. HA only renders durations that
     way in its native seconds unit; minute-based duration sensors get
-    mangled into '663m 12s' (owner screenshot, 2026-10-18)."""
+    mangled into '663m 12s' (owner screenshot, 2026-10-18). TIME-TO-FULL is
+    exempt since 2026-10-20: it is a text sensor ('Not charging' / '5h 20m')
+    because device-page 'unknown' is unacceptable UX - the owner decision
+    supersedes the seconds doctrine for that entity. Runtime stays seconds."""
     src = (
         Path(__file__).resolve().parents[1]
         / "custom_components" / "oupes_mega_ble" / "sensor.py"
     ).read_text(encoding="utf-8")
-    for key in ("runtime_estimate", "time_to_full"):
-        block = src.split(f'key="{key}"')[1].split("),")[0]
-        assert "UnitOfTime.SECONDS" in block, f"{key} back to minutes -> '663m 12s'"
-    assert src.count("round(minutes * 60)") == 2, "both ETA branches must emit seconds"
+    block = src.split('key="runtime_estimate"')[1].split("),")[0]
+    assert "UnitOfTime.SECONDS" in block, "runtime back to minutes -> '663m 12s'"
+    assert "round(minutes * 60)" in src, "runtime must still emit seconds"
+
+
+def test_time_to_full_speaks_words_not_unknown():
+    """'unknown' on a device page is not UX (owner 2026-10-20). The entity
+    refuses NUMBERS with WORDS: Not charging / Full / Nearly full, and
+    formats real durations itself ('Xh YYm') since it lost the duration
+    device-class needed for text states."""
+    src = (
+        Path(__file__).resolve().parents[1]
+        / "custom_components" / "oupes_mega_ble" / "sensor.py"
+    ).read_text(encoding="utf-8")
+    block = src.split('key="time_to_full"')[1].split("),")[0]
+    assert "UnitOfTime" not in block, "duration unit would forbid text states"
+    branch = src.split('minutes = time_to_full_minutes')[1]
+    for word in ("Not charging", "Full", "Nearly full", "h {m:02d}m"):
+        assert word in branch, f"refusal vocabulary lost: {word}"
 
 
 def test_stored_energy_is_a_total_not_a_bare_gauge():
