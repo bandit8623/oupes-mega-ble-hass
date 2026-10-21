@@ -37,6 +37,7 @@ from .protocol import (
     stored_energy_wh,
     time_to_full_minutes,
     total_load_w,
+    awake_idle_draw_w,
 )
 from .const import series_from_product_id
 
@@ -500,6 +501,14 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             # stopped right now, how long does the house run?" — which is
             # meaningful while charging too, and the owner wants a time
             # always, not a refusal. Owner decision 2026-10-19.
+            # v1.4.15 "efficiency & truth": output registers do NOT include
+            # the station's own awake-idle draw (measured 57 W on Guardian
+            # V2, 2026-10-20 no-load day; invisible to every watt sensor).
+            # Dividing by output alone flatters runtime by ~40% and at light
+            # load pushes the answer past the 1-week honesty ceiling, so the
+            # entity silently refuses where a correct number exists.
+            if load is not None:
+                load += awake_idle_draw_w(self.coordinator.product_series)
             minutes = runtime_estimate_minutes(energy, load)
             return None if minutes is None else round(minutes * 60)
         if desc.key == "time_to_full":

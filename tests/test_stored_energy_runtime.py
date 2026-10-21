@@ -313,3 +313,28 @@ def test_stored_energy_is_a_total_not_a_bare_gauge():
         "(repair floor issue) and MEASUREMENT/TOTAL_INCREASING are rejected "
         "or dishonest for a battery level"
     )
+
+
+# ------------------------------------------------- awake-idle draw (1.4.15)
+# 2026-10-20 measured no-load day: Guardian V2 burns ~57 W just being awake,
+# invisible to every output register.  Dividing runtime by OUTPUT load alone
+# both flatters the answer AND (light loads) exceeds the refusal ceiling so
+# the entity shows unknown while a correct number was one addition away.
+
+def test_awake_idle_draw_constant_measured_value():
+    assert protocol.AWAKE_IDLE_DRAW_W["guardian"] == 57.0
+    assert protocol.awake_idle_draw_w("guardian") == 57.0
+
+def test_unknown_series_gets_zero_not_a_guess():
+    assert protocol.awake_idle_draw_w("mega1") == 0.0
+
+def test_output_only_divisor_is_the_refusal_bug():
+    # real 2026-10-20 window: 17188 Wh stored, 65 W filter
+    assert runtime_estimate_minutes(17188, 65.0) is None  # >1 week -> refused
+    with_idle = runtime_estimate_minutes(17188, 65.0 + 57.0)
+    assert with_idle is not None
+    assert 8400 < with_idle < 8700  # ~142 h, inside the honest ceiling
+
+def test_idle_draw_never_negative_or_absurd():
+    for w in protocol.AWAKE_IDLE_DRAW_W.values():
+        assert 5.0 <= w <= 200.0  # plausible inverter-stage idle range

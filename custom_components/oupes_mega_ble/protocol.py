@@ -838,6 +838,24 @@ WH_PER_BATTERY_UNIT: dict[str, int] = {
     "guardian": 4608,
 }
 
+# Energy the station itself burns while awake with the AC output energised,
+# per product series (W).  NOT visible in any output register: the AC/pack
+# watt sensors mirror each other and both exclude the inverter stage's own
+# appetite.  Measured on a Guardian V2 + 3 expansion packs, 2026-10-20,
+# 8 h no-AC-load day: BMS stored-energy delta (968 Wh) minus metered AC
+# output (514 Wh) over 8 h = ~57 W; corroborated independently by SoC drift
+# (-5% x 18,432 Wh nameplate = 920 Wh, same answer).  Unknown series get
+# 0.0: an unmeasured number must not silently enter anyone's runtime math.
+AWAKE_IDLE_DRAW_W: dict[str, float] = {
+    "guardian": 57.0,
+}
+
+
+def awake_idle_draw_w(series: str) -> float:
+    """Measured awake-idle draw for a product series; 0.0 when unmeasured."""
+    return AWAKE_IDLE_DRAW_W.get(series, 0.0)
+
+
 # Below this measured load an hours-remaining figure is fantasy (standby
 # draw, sensor noise, or the AC inverter idling with nothing plugged in).
 _MIN_MEANINGFUL_LOAD_W = 5.0

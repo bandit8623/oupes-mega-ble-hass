@@ -8,6 +8,19 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.15 - 2026-10-20
+
+### Fixed
+
+- **Estimated runtime no longer refuses to exist at light loads.** Runtime
+  math divided by output-register load only, which excludes the station's
+  own awake-idle draw (measured: 57 W on Guardian V2, 8 h no-load day,
+  BMS-energy route; invisible to every watt sensor). At filter-class loads
+  that omission pushed the answer past the one-week honesty ceiling, so the
+  sensor reported unknown while a correct number was one addition away.
+  The measured idle draw is now a per-series constant (unknown series get
+  0.0 - an unmeasured number never silently enters the math).
+
 ## 1.4.13 - 2026-10-19
 
 ### Fixed
