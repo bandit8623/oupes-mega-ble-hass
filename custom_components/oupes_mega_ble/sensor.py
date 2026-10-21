@@ -77,6 +77,20 @@ class OUPESSensorDescription(SensorEntityDescription):
     entity_registry_visible: bool = True
 
 
+# -- Duration words ------------------------------------------------------------
+
+def _hm_text(minutes: float | None) -> str | None:
+    """Minutes -> '19h 11m' / '42m' text. Device-page durations in HA
+    2026.10 render raw ('69,138.00 s', '1,158m' - owner screenshots
+    2026-10-20), so every duration this integration shows is a WORDS
+    sensor. None passes through (refusal keeps its own words upstream)."""
+    if minutes is None:
+        return None
+    total = int(round(float(minutes)))
+    h, m = divmod(total, 60)
+    return f"{h}h {m:02d}m" if h else f"{m}m"
+
+
 # -- Main device sensors ------------------------------------------------------
 
 SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
@@ -128,16 +142,12 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         # (idle load, >1-week answers report unknown instead of garbage).
         # "Load" is EVERY output register - AC + 12V + USB-C + USB-A - not
         # just AC (see protocol.total_load_w).
+        # TEXT since 2026-10-20: the seconds-unit duration trick rendered
+        # '69,138.00 s' on the owner's HA 2026.10 device page (screenshot,
+        # not theory). Words like the time-to-full sibling: '19h 11m'.
         key="runtime_estimate",
         attr=4,
         name="Estimated Runtime Left",
-        device_class=SensorDeviceClass.DURATION,
-        state_class=SensorStateClass.MEASUREMENT,
-        # SECONDS, not minutes: the HA frontend renders duration sensors
-        # human-readably only in its native duration unit - seconds give
-        # "11 h 3 min" on the device page, while minute-based sensors get
-        # rendered as "663m 12s" nonsense (owner-reported, verified).
-        native_unit_of_measurement=UnitOfTime.SECONDS,
         icon="mdi:timer-sand",
     ),
     OUPESSensorDescription(
@@ -396,13 +406,13 @@ def _slot_descriptions(slot: int) -> list[OUPESSensorDescription]:
             data_key="last_runtime_min",
             slot=slot,
             name=f"{display_name} Runtime",
-            device_class=SensorDeviceClass.DURATION,
-            state_class=SensorStateClass.MEASUREMENT,
-            native_unit_of_measurement=UnitOfTime.MINUTES,
             icon="mdi:timer-outline",
-            # Only stores real runtime values; the 99h sentinel (5940 min) that
-            # the firmware emits when charging/idle is filtered out in the
-            # coordinator, so this sensor goes Unknown when not discharging.
+            # TEXT since 2026-10-20 (owner screenshot: '1,158m' on the
+            # device page): renders '19h 11m' itself. Only stores real
+            # runtime values; the 99h sentinel (5940 min) that the firmware
+            # emits when charging/idle is filtered out in the coordinator,
+            # so this sensor goes Unknown when not discharging.
+            value_fn=lambda v: _hm_text(v),
         ),
         OUPESSensorDescription(
             key=f"ext_battery_{slot}_temp",
@@ -533,7 +543,7 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             if load is not None:
                 load += awake_idle_draw_w(self.coordinator.product_series)
             minutes = runtime_estimate_minutes(energy, load)
-            return None if minutes is None else round(minutes * 60)
+            return _hm_text(minutes)
         if desc.key == "time_to_full":
             deficit = missing_energy_wh(
                 self.coordinator.product_series,

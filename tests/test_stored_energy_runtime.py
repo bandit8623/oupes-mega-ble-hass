@@ -278,20 +278,27 @@ def test_runtime_branch_answers_the_owners_question():
     )
 
 
-def test_duration_sensors_emit_seconds_for_human_rendering():
-    """Device page must read '11 h 3 min'. HA only renders durations that
-    way in its native seconds unit; minute-based duration sensors get
-    mangled into '663m 12s' (owner screenshot, 2026-10-18). TIME-TO-FULL is
-    exempt since 2026-10-20: it is a text sensor ('Not charging' / '5h 20m')
-    because device-page 'unknown' is unacceptable UX - the owner decision
-    supersedes the seconds doctrine for that entity. Runtime stays seconds."""
+def test_runtimes_speak_words_not_raw_durations():
+    """The seconds-unit duration doctrine is DEAD (owner screenshot
+    2026-10-20: HA 2026.10 renders 'Estimated Runtime Left' as the literal
+    '69,138.00 s' on the device page, and external-pack durations as
+    '1,158m'). Every duration the device page shows is now a WORDS sensor
+    ('19h 11m') via _hm_text - same decision as time-to-full. If this test
+    fails because someone re-added DURATION/MEASUREMENT to a runtime
+    description, read the screenshot comment in sensor.py first."""
     src = (
         Path(__file__).resolve().parents[1]
         / "custom_components" / "oupes_mega_ble" / "sensor.py"
     ).read_text(encoding="utf-8")
     block = src.split('key="runtime_estimate"')[1].split("),")[0]
-    assert "UnitOfTime.SECONDS" in block, "runtime back to minutes -> '663m 12s'"
-    assert "round(minutes * 60)" in src, "runtime must still emit seconds"
+    assert "device_class" not in block, "runtime_estimate must be a TEXT sensor"
+    assert "state_class" not in block
+    assert "_hm_text(minutes)" in src, "runtime_estimate must render words"
+    ext = src.split('key=f"ext_battery_{slot}_runtime"')[1].split("\n        ),")[0]
+    assert "_hm_text(v)" in ext, "external pack runtime must render words"
+    assert "state_class" not in ext
+    helper = src.split("def _hm_text")[1].split("def ")[0]
+    assert 'f"{h}h {m:02d}m"' in helper, "words format must be 'Xh YYm'"
 
 
 def test_time_to_full_speaks_words_not_unknown():

@@ -19,6 +19,14 @@ This fork tracks
   decision). AC switched off returns the raw register; an ECO-sleeping
   inverter has no overhead to report.
 
+- **All device-page durations speak words now**: Estimated Runtime Left
+  rendered as '69,138.00 s' on HA 2026.10 (the seconds-unit duration trick
+  the frontend was supposed to prettify no longer is), and External
+  Battery Runtime as raw '1,158m'. Both - and every slot runtime - now
+  emit '19h 11m' text themselves. The numeric diagnostic 'Remaining
+  Runtime' (raw firmware dpid 30, collapsed section) intentionally stays
+  numeric history.
+
 ### Fixed
 
 - **A blank `product_id` no longer silently loses every computed
