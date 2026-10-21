@@ -36,6 +36,8 @@ from .protocol import (
     runtime_estimate_minutes,
     stored_energy_wh,
     time_to_full_minutes,
+    soc_slope_w,
+    WH_PER_BATTERY_UNIT,
     total_load_w,
     awake_idle_draw_w,
     inverter_overhead_w,
@@ -572,6 +574,20 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 charge_w = None
             else:
                 charge_w = total_charge
+            # Guardian quirk (field case 2026-10-21): the main unit's internal
+            # pack input register (dpid 24) reports 0 W while solar charging
+            # and its SoC climbs.  The pack's own SoC slope is the honest
+            # pack-side stand-in; requiring external charge flow gates this
+            # to real charging windows only.
+            if charge_w is not None and ext_in > 0 and (
+                self.coordinator.data["attrs"].get(24) or 0
+            ) <= 0:
+                slope = soc_slope_w(
+                    getattr(self.coordinator, "soc_samples", ()),
+                    WH_PER_BATTERY_UNIT.get(self.coordinator.product_series),
+                )
+                if slope:
+                    charge_w += slope
             minutes = time_to_full_minutes(deficit, charge_w)
             if minutes is None:
                 # Refusal is not silence: answer with WHY (owner rule

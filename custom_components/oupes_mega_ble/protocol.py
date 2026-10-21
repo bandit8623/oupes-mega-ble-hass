@@ -1065,3 +1065,55 @@ def inverter_overhead_w(ac_output_w: float) -> float:
             t = (ac_output_w - x[i - 1]) / (x[i] - x[i - 1])
             return y[i - 1] + (y[i] - y[i - 1]) * t
     return y[-1]  # pragma: no cover - loop always returns above
+
+
+# --- SoC-slope fallback for a silent internal-pack input register ----------
+# Field case (Guardian 6000 V2 + 3 external packs, 2026-10-21): while solar
+# charging, every external pack reports its input watts (dpid 53) but the
+# MAIN unit's battery-input register (dpid 24) reports 0 even as its SoC
+# climbs 71->73%.  Time-to-full divides by measured charge watts, so a
+# register that lies zero makes the ETA overstate the wait for whatever the
+# main pack is quietly absorbing.  SoC is honest even when watts lie: a
+# pack gaining X% of its nameplate per hour is accepting X*wh_unit/h watts
+# into itself (pack-side, same side the external meters report - the
+# charger losses are upstream of both).
+SOC_SLOPE_MIN_SPAN_S = 600     # 1% = 46 Wh; <10 min of samples is quantisation noise
+SOC_SLOPE_MAX_SPAN_S = 2700    # older than 45 min describes a charge rate that is gone
+SOC_SLOPE_MAX_W      = 2500.0  # above this it is a BMS re-estimate step, not a charge rate
+
+
+def soc_slope_w(samples, wh_unit: int | None) -> float | None:
+    """Charge watts into a pack inferred from its own SoC climbing.
+
+    samples: iterable of (monotonic_seconds, soc_percent) oldest-first.
+    Measures the span from the oldest sample no older than
+    SOC_SLOPE_MAX_SPAN_S to the newest; refuses (None) unless the span is
+    at least SOC_SLOPE_MIN_SPAN_S, SoC rose, and the implied power is
+    physically plausible (<= SOC_SLOPE_MAX_W).  A BMS recalibration jump
+    (2% in one poll) is exactly the lie this cap catches - refusing here
+    costs an over-long ETA, believing it would cost a time machine.
+    """
+    if not wh_unit or wh_unit <= 0:
+        return None
+    pts = [(ts, soc) for ts, soc in samples if isinstance(soc, (int, float))
+           and not isinstance(soc, bool)]
+    if len(pts) < 2:
+        return None
+    newest_ts, newest_soc = pts[-1]
+    oldest = None
+    for ts, soc in pts:
+        if 0 <= newest_ts - ts <= SOC_SLOPE_MAX_SPAN_S:
+            oldest = (ts, soc)
+            break
+    if oldest is None:
+        return None
+    span = newest_ts - oldest[0]
+    if span < SOC_SLOPE_MIN_SPAN_S:
+        return None
+    dsoc = newest_soc - oldest[1]
+    if dsoc <= 0:
+        return None
+    watts = (dsoc / 100.0) * wh_unit / (span / 3600.0)
+    if watts > SOC_SLOPE_MAX_W:
+        return None
+    return round(watts, 1)

@@ -7,6 +7,7 @@ import logging
 import threading as _threading
 import time as _time
 import traceback as _traceback
+from collections import deque
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -121,6 +122,9 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         self._active_client: BleakClient | None = None
         self._live_push_interval = max(1.0, float(live_push_interval_seconds))
         self._live_data: OUPESData | None = None
+        # (monotonic_ts, main-pack SoC %) - feeds protocol.soc_slope_w when
+        # the internal-pack input register reports 0 while the pack charges.
+        self.soc_samples: deque = deque(maxlen=240)
         self._continuous_task: asyncio.Task | None = None
         # Build Cmd2 query packets that read this device's supported settings.
         # Split into small batches (7 DPIDs each) matching the Cleanergy app.
@@ -326,6 +330,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                     )
                     continue  # retry rather than immediately failing
                 self.last_successful_poll = datetime.now()
+                self._record_soc(data)
                 return data
 
             _LOGGER.debug(
@@ -382,6 +387,12 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             self._continuous_task.cancel()
             _LOGGER.debug("Cancelled continuous BLE task for %s", self.address)
         self._continuous_task = None
+
+    def _record_soc(self, data: OUPESData) -> None:
+        """Keep (monotonic_ts, main-pack SoC) for protocol.soc_slope_w."""
+        soc = (data.get("attrs") or {}).get(3)
+        if isinstance(soc, int):
+            self.soc_samples.append((_time.monotonic(), soc))
 
     async def _run_continuous_connection(self) -> None:
         """Loop: connect -> run indefinitely -> reconnect after disconnect/error."""
@@ -457,6 +468,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                 "ext_batteries": {s: dict(sd) for s, sd in ext_batteries.items()},
             }
             self._live_data = data
+            self._record_soc(data)
             self.last_successful_poll = datetime.now()
             c_last_push[0] = _time.monotonic()
             c_push_pending[0] = False
