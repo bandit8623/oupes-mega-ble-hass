@@ -150,7 +150,7 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         # not theory). Words like the time-to-full sibling: '19h 11m'.
         key="runtime_estimate",
         attr=4,
-        name="Estimated Runtime Left",
+        name="Runtime Left",
         icon="mdi:timer-sand",
     ),
     OUPESSensorDescription(

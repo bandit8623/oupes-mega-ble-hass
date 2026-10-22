@@ -23,6 +23,9 @@ This fork tracks
   flattering the ETA for half an hour. Tonight's soak CSV is a test fixture.
 
 ### Changed
+- **`Estimated Runtime Left` renamed `Runtime Left`** - the sibling rename;
+  matches what dashboard cards have been titling it since day one. Entity id
+  unchanged; owner custom names untouched.
 - **`Estimated Time To Full` renamed `Time To Full Charge`** - "Estimated" was
   honest but ate the dashboard tile; the refusal words (Full / Nearly
   full / Not charging) already tell the estimate's confidence. Entity id
