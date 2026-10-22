@@ -8,7 +8,7 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
-## 1.4.18 - unreleased (owner field-test 2026-10-22)
+## Unreleased - v1.4.18 candidate (owner field-test 2026-10-22)
 
 ### Fixed
 - **`Time To Full` no longer trusts the instantaneous charge meters.**
