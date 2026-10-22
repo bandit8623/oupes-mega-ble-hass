@@ -23,7 +23,7 @@ This fork tracks
   flattering the ETA for half an hour. Tonight's soak CSV is a test fixture.
 
 ### Changed
-- **`Estimated Time To Full` renamed `Time To Full`** - "Estimated" was
+- **`Estimated Time To Full` renamed `Time To Full Charge`** - "Estimated" was
   honest but ate the dashboard tile; the refusal words (Full / Nearly
   full / Not charging) already tell the estimate's confidence. Entity id
   unchanged; HA keeps any owner-set custom name.

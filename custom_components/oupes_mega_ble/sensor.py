@@ -161,7 +161,7 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         # when full, idle, discharging, or beyond a week.
         key="time_to_full",
         attr=21,
-        name="Time To Full",
+        name="Time To Full Charge",
         icon="mdi:timer-plus",
     ),
     OUPESSensorDescription(
