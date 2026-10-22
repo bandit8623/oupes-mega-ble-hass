@@ -8,6 +8,26 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.18 - unreleased (owner field-test 2026-10-22)
+
+### Fixed
+- **`Time To Full` no longer trusts the instantaneous charge meters.**
+  Field case: a charge the meters summed at 1.86 kW while the stored-Wh
+  tank demonstrably filled at 2.90 kW; the ETA called an 84-minute charge
+  "almost 2 hours" for its entire first half. The rate is now the EWMA of
+  the station's own stored-energy slope (`protocol.absorption_ewma_w`),
+  covering main + every external pack with the same inclusion rules as the
+  sensor owners already audit, gated to evidenced-charging windows and
+  backed by the old meter path for the first minutes after startup. The
+  CV taper at the top of a charge is now tracked within minutes instead of
+  flattering the ETA for half an hour. Tonight's soak CSV is a test fixture.
+
+### Changed
+- **`Estimated Time To Full` renamed `Time To Full`** - "Estimated" was
+  honest but ate the dashboard tile; the refusal words (Full / Nearly
+  full / Not charging) already tell the estimate's confidence. Entity id
+  unchanged; HA keeps any owner-set custom name.
+
 ## 1.4.17 - 2026-10-21
 
 ### Fixed
