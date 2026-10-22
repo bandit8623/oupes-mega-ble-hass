@@ -8,6 +8,34 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.17 - 2026-10-21
+
+### Fixed
+
+- **`soc_slope_w` no longer reports 0 W while the battery is charging**
+  when the firmware lies on the main-pack charge dpid (24): the main
+  pack's share is now inferred from total input power minus the externals
+  that are visibly charging. Verified against rack-scale field captures
+  (0/1/3/6/8 expansion packs, main unit once).
+
+- **SoC slope fallback for main-unit-only installs**: with no externals
+  reporting, the fallback now gates on net input power instead of a
+  non-zero charge register, so a lying zero no longer suppresses the
+  runtime/charge-rate estimates.
+
+### Changed
+
+- **SoC sample recording throttled to one sample per 30 s.** The 1-2 s
+  live-push cadence starved the 240-sample ring buffer below its own
+  10-minute slope window, making the fallback fire on micro-movements.
+  Live sensor pushes are untouched; only the slope history de-noises.
+
+### Verified
+
+- Live soak 2026-10-21: grid→battery transition and the full 100→99→…→70
+  descent (8 h, ~13 min/%, monotonic, no adjacent-value jitter) on a
+  Guardian v2 + 3-pack rack.
+
 ## 1.4.16 - 2026-10-20
 
 ### Added
