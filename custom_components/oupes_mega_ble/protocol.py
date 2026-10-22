@@ -1081,6 +1081,52 @@ SOC_SLOPE_MIN_SPAN_S = 600     # 1% = 46 Wh; <10 min of samples is quantisation 
 SOC_SLOPE_MAX_SPAN_S = 2700    # older than 45 min describes a charge rate that is gone
 SOC_SLOPE_MAX_W      = 2500.0  # above this it is a BMS re-estimate step, not a charge rate
 
+ABSORPTION_MIN_SPAN_S = 300      # 5 min of stored-Wh history is already 100s of Wh of signal
+ABSORPTION_MAX_SPAN_S = 1800     # EWMA window: only the last 30 min describe the present rate
+ABSORPTION_MAX_W      = 8000.0   # a Guardian rack takes at most ~5 kW; above is a counter glitch
+ABSORPTION_EWMA_ALPHA = 0.35     # ~3 recent samples dominate: tracks the CV taper within minutes
+
+
+def absorption_ewma_w(samples) -> float | None:
+    """Smooth charge absorption (W) from total stored-Wh samples.
+
+    samples: iterable of (monotonic_seconds, total_stored_wh) oldest-first,
+    where total_stored_wh comes from stored_energy_wh() - i.e. main pack +
+    every external pack, one number the station itself reports.  Differencing
+    it measures what the RACK actually absorbed, immune to the register
+    quirks that make the instantaneous meters lie (main-pack input dpid 24
+    stuck at 0 under solar; external input meters under-counting, field case
+    2026-10-22: meters summed 1.86 kW while the Wh tank filled at 2.90 kW,
+    overstating time-to-full by ~40% through a whole charge).
+
+    Pairwise slopes over the last ABSORPTION_MAX_SPAN_S are EWMA-smoothed
+    toward the newest, so the constant-current -> constant-voltage taper is
+    tracked within minutes instead of flattering the ETA for half an hour.
+    Returns the smoothed rate (may be <= 0 - caller's reject rules handle
+    it), or None when history is too short, too stale, or implausible.
+    """
+    pts = [(ts, wh) for ts, wh in samples
+           if isinstance(wh, (int, float)) and not isinstance(wh, bool)]
+    if len(pts) < 3:
+        return None
+    newest_ts = pts[-1][0]
+    pts = [p for p in pts if 0 <= newest_ts - p[0] <= ABSORPTION_MAX_SPAN_S]
+    if len(pts) < 3 or newest_ts - pts[0][0] < ABSORPTION_MIN_SPAN_S:
+        return None
+    slopes = []
+    for (t0, w0), (t1, w1) in zip(pts, pts[1:]):
+        dt = t1 - t0
+        if dt > 0:
+            slopes.append((w1 - w0) / (dt / 3600.0))
+    if len(slopes) < 2:
+        return None
+    ewma = slopes[0]
+    for s in slopes[1:]:
+        ewma = ABSORPTION_EWMA_ALPHA * s + (1.0 - ABSORPTION_EWMA_ALPHA) * ewma
+    if ewma > ABSORPTION_MAX_W:
+        return None  # counter glitch or a pack hot-swapped mid-window; refuse
+    return round(ewma, 1)
+
 
 def soc_slope_w(samples, wh_unit: int | None) -> float | None:
     """Charge watts into a pack inferred from its own SoC climbing.

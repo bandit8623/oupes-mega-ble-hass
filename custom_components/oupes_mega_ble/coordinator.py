@@ -44,6 +44,7 @@ from .protocol import (
     parse_ble_packet,
     parse_packet_sequence,
     product_uses_packed_power,
+    stored_energy_wh,
     build_output_command,  # noqa: F401 - re-exported for switch.py
 )
 
@@ -125,6 +126,9 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         # (monotonic_ts, main-pack SoC %) - feeds protocol.soc_slope_w when
         # the internal-pack input register reports 0 while the pack charges.
         self.soc_samples: deque = deque(maxlen=240)
+        # (monotonic_ts, total_stored_wh) - feeds protocol.absorption_ewma_w,
+        # the honest time-to-full rate: what the Wh tank actually swallowed.
+        self.energy_samples: deque = deque(maxlen=120)
         self._continuous_task: asyncio.Task | None = None
         # Build Cmd2 query packets that read this device's supported settings.
         # Split into small batches (7 DPIDs each) matching the Cleanergy app.
@@ -331,6 +335,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                     continue  # retry rather than immediately failing
                 self.last_successful_poll = datetime.now()
                 self._record_soc(data)
+                self._record_energy(data)
                 return data
 
             _LOGGER.debug(
@@ -402,6 +407,26 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             if self.soc_samples and now - self.soc_samples[-1][0] < 30.0:
                 return
             self.soc_samples.append((now, soc))
+
+    def _record_energy(self, data: OUPESData) -> None:
+        """Keep (monotonic_ts, total_stored_wh) for protocol.absorption_ewma_w.
+
+        stored_energy_wh() is the exact number the Battery Energy Stored
+        sensor shows - main pack plus every reporting external - so the
+        differenced slope is the absorption the owner can audit against the
+        sensor graph.  Throttled like _record_soc (live push is 1-2s);
+        120 x 30s = 1h of history, double the EWMA window.
+        """
+        stored = stored_energy_wh(
+            self.product_series or "",
+            data.get("attrs") or {},
+            data.get("ext_batteries"),
+        )
+        if stored is not None:
+            now = _time.monotonic()
+            if self.energy_samples and now - self.energy_samples[-1][0] < 30.0:
+                return
+            self.energy_samples.append((now, stored))
 
     async def _run_continuous_connection(self) -> None:
         """Loop: connect -> run indefinitely -> reconnect after disconnect/error."""
@@ -478,6 +503,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             }
             self._live_data = data
             self._record_soc(data)
+            self._record_energy(data)
             self.last_successful_poll = datetime.now()
             c_last_push[0] = _time.monotonic()
             c_push_pending[0] = False

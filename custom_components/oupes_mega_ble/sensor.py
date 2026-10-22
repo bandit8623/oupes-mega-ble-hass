@@ -37,6 +37,7 @@ from .protocol import (
     stored_energy_wh,
     time_to_full_minutes,
     soc_slope_w,
+    absorption_ewma_w,
     WH_PER_BATTERY_UNIT,
     total_load_w,
     awake_idle_draw_w,
@@ -597,6 +598,25 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 )
                 if slope:
                     charge_w += slope
+            # Field case 2026-10-22 night charge: the summed instantaneous
+            # meters (internal dpid 24 + external dpid 53s) read 1.86 kW
+            # while the stored-Wh tank demonstrably filled at 2.90 kW, and
+            # the ETA overstated a 84-minute charge as ~2 h.  The tank's own
+            # slope is the primary rate now: it counts what really went in,
+            # every pack at once, and its EWMA rides the CV taper instead of
+            # flattering the ETA for the whole constant-current leg.  Only
+            # trusted while charging is evidenced (same gate as soc_slope),
+            # positive, and the meter path above stays as cold-start
+            # fallback until 5+ minutes of history exist.
+            absorption = absorption_ewma_w(
+                getattr(self.coordinator, "energy_samples", ())
+            )
+            if (
+                absorption is not None
+                and absorption > 0.0
+                and (ext_in > 0 or net_input_w > 0)
+            ):
+                charge_w = absorption
             minutes = time_to_full_minutes(deficit, charge_w)
             if minutes is None:
                 # Refusal is not silence: answer with WHY (owner rule
