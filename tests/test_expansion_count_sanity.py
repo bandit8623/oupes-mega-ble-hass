@@ -7,9 +7,16 @@ sat at 3 for weeks.  The gate accepts only possible firmware answers
 (0..8); everything else falls through to the slot-counting fallback that
 already proved itself trustworthy.
 """
+import sys
 from pathlib import Path
 
-from custom_components.oupes_mega_ble.protocol import sane_expansion_count
+# CI's "Standalone runner" step executes every test file with a bare
+# `python tests/<f>.py`, where pytest's rootdir insertion does not exist and
+# `custom_components` is not a package (custom integrations ship no __init__.py),
+# so this is the same bootstrap the other bare-interpreter tests use.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "custom_components" / "oupes_mega_ble"))
+
+from protocol import sane_expansion_count  # noqa: E402
 
 SENSOR_SRC = (
     Path(__file__).parent.parent / "custom_components" / "oupes_mega_ble" / "sensor.py"
