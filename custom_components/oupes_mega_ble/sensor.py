@@ -653,6 +653,16 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             if desc.key == "expansion_battery_count":
                 return _derive_ext_count(self.coordinator.data.get("ext_batteries"))
             return None
+        if desc.key == "expansion_battery_count":
+            # dpid 51 exists but sometimes arrives as endianness garbage
+            # (field: 167772160 == 0x0A<<24).  Trust firmware only when the
+            # answer is possible; otherwise count reporting slots.
+            from .protocol import sane_expansion_count
+            sane = sane_expansion_count(raw)
+            if sane is not None:
+                return sane
+            derived = _derive_ext_count(self.coordinator.data.get("ext_batteries"))
+            return derived if derived is not None else None
         return desc.value_fn(raw) if desc.value_fn is not None else raw
 
 

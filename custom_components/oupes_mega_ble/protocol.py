@@ -1163,3 +1163,20 @@ def soc_slope_w(samples, wh_unit: int | None) -> float | None:
     if watts > SOC_SLOPE_MAX_W:
         return None
     return round(watts, 1)
+
+
+def sane_expansion_count(raw) -> int | None:
+    """Gate for dpid 51 (expansion pack count).
+
+    Field evidence 2026-10-22: a Guardian V2 pushed dpid 51 as 167772160
+    (0x0A000000 - byte-order/field-layout garbage) straight onto the
+    dashboard.  The real firmware answer can only ever be a small
+    non-negative integer; anything else is the unit misspeaking, and the
+    sensor should fall back to counting reporting slots instead of
+    publishing an odometer of nonsense.
+    """
+    if isinstance(raw, bool) or not isinstance(raw, int):
+        return None
+    if 0 <= raw <= 8:
+        return raw
+    return None

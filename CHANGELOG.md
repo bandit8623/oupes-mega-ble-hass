@@ -11,6 +11,12 @@ This fork tracks
 ## Unreleased - v1.4.18 candidate (owner field-test 2026-10-22)
 
 ### Fixed
+- **`Expansion Battery Count` can no longer publish firmware nonsense.**
+  Field case: a Guardian V2 pushed dpid 51 as 167,772,160 (0x0A000000 -
+  byte-order garbage) straight onto the dashboard, overriding the honest
+  slot-counted answer. dpid 51 is now trusted only when it's a possible
+  number (0-8); any other value falls back to counting packs that report
+  telemetry, and an honest 0 (packs switched off) still passes through.
 - **`Time To Full` no longer trusts the instantaneous charge meters.**
   Field case: a charge the meters summed at 1.86 kW while the stored-Wh
   tank demonstrably filled at 2.90 kW; the ETA called an 84-minute charge
