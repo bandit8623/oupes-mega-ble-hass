@@ -1085,6 +1085,10 @@ ABSORPTION_MIN_SPAN_S = 300      # 5 min of stored-Wh history is already 100s of
 ABSORPTION_MAX_SPAN_S = 1800     # EWMA window: only the last 30 min describe the present rate
 ABSORPTION_MAX_W      = 8000.0   # a Guardian rack takes at most ~5 kW; above is a counter glitch
 ABSORPTION_EWMA_ALPHA = 0.35     # ~3 recent samples dominate: tracks the CV taper within minutes
+ABSORPTION_DROP_TOL_WH = 250.0   # 4 packs x a 1% SoC step; a bigger 30s fall never emptied
+                                 # the rack, it means a pack stopped ANSWERING the poll
+ABSORPTION_OUTLIER_W   = 1500.0  # slack above the median slope tolerated before a sample is
+                                 # treated as a BMS re-estimate step
 
 
 def absorption_ewma_w(samples) -> float | None:
@@ -1104,6 +1108,18 @@ def absorption_ewma_w(samples) -> float | None:
     tracked within minutes instead of flattering the ETA for half an hour.
     Returns the smoothed rate (may be <= 0 - caller's reject rules handle
     it), or None when history is too short, too stale, or implausible.
+
+    v1.4.18 (field case 2026-10-23, 4 h solar charge): stored_energy_wh() sums
+    only the packs that ANSWERED, and it is derived from integer-percent SoC, so
+    the series is a staircase with holes - a dropped pack reply reads as hundreds
+    of Wh vanishing, and two SoC resyncs in one 30 s pair read as >10 kW.  Both
+    artifacts used to poison the estimate in the same way: a big negative slope
+    dragged the EWMA down, and a big positive one tripped the 8 kW guard, which
+    RETURNED None and handed time_to_full to the instantaneous meters (main-pack
+    register pinned at 0-67 W, often only one of three external packs reporting,
+    ~800 W total).  The ETA then flapped 25%% of updates - median 4h29m against a
+    measured 2h42m truth, worst sample 56h12m.  Artifacts are now removed where
+    they are created, and an over-cap EWMA is clamped rather than refused.
     """
     pts = [(ts, wh) for ts, wh in samples
            if isinstance(wh, (int, float)) and not isinstance(wh, bool)]
@@ -1113,19 +1129,74 @@ def absorption_ewma_w(samples) -> float | None:
     pts = [p for p in pts if 0 <= newest_ts - p[0] <= ABSORPTION_MAX_SPAN_S]
     if len(pts) < 3 or newest_ts - pts[0][0] < ABSORPTION_MIN_SPAN_S:
         return None
-    slopes = []
+    raw = []
     for (t0, w0), (t1, w1) in zip(pts, pts[1:]):
         dt = t1 - t0
-        if dt > 0:
-            slopes.append((w1 - w0) / (dt / 3600.0))
-    if len(slopes) < 2:
+        if dt <= 0:
+            continue
+        dwh = w1 - w0
+        if dwh < -ABSORPTION_DROP_TOL_WH:
+            # No battery loses this in half a minute; a pack just stopped
+            # answering, so the next sum covered fewer packs.  Skipping the PAIR
+            # (not the point) keeps the honest level on both sides of the hole.
+            continue
+        raw.append(dwh / (dt / 3600.0))
+    if len(raw) < 2:
         return None
+    ordered = sorted(raw)
+    median = (ordered[len(ordered) // 2] if len(ordered) % 2
+              else (ordered[len(ordered) // 2 - 1] + ordered[len(ordered) // 2]) / 2.0)
+    if median > ABSORPTION_MAX_W:
+        # Most of the window is beyond physics, so the COUNTER is lying (or a pack
+        # was hot-swapped in).  Nothing here is trustworthy: refuse, and let the
+        # caller's meter path - now gated on a complete pack set - answer.
+        return None
+    # Only individual samples may exceed physics (an SoC resync step).  Clip them
+    # and drop the ones far above the typical slope instead of throwing the whole
+    # window away, which used to be the way this function handed the ETA to the
+    # meters and produced a 56 h time-to-full on a rack charging at 2.9 kW.
+    slopes = [min(s, ABSORPTION_MAX_W) for s in raw]
+    if median > 0:
+        keep = [s for s in slopes
+                if s <= max(2.0 * median, median + ABSORPTION_OUTLIER_W)]
+        if len(keep) >= 2:
+            slopes = keep
     ewma = slopes[0]
     for s in slopes[1:]:
         ewma = ABSORPTION_EWMA_ALPHA * s + (1.0 - ABSORPTION_EWMA_ALPHA) * ewma
     if ewma > ABSORPTION_MAX_W:
-        return None  # counter glitch or a pack hot-swapped mid-window; refuse
+        # Clamping keeps a plausible, slightly optimistic answer; refusing used
+        # to fall through to meters that were 3-4x too slow (see above).
+        return ABSORPTION_MAX_W
     return round(ewma, 1)
+
+
+def ttf_rate_hysteresis(prev_w, new_w, streak: int,
+                        ratio: float = 2.5, needed: int = 3):
+    """Ride out single-sample spikes in the charge rate used for time-to-full.
+
+    Returns (rate_to_use, streak).  A candidate that agrees with the held rate
+    within `ratio` is adopted immediately.  A candidate that disagrees is a
+    single-sample artifact the first times it appears (the Wh staircase, a pack
+    that skipped a poll) and a real change the third time (CV taper, load step,
+    a pack plugged or unplugged), so it must survive `needed` consecutive
+    disagreements before it is believed.
+
+    Field case 2026-10-23: the ETA leapt >=2 hours on 25% of updates while the
+    rack charged at a constant 2.9 kW.  An ETA that flaps is as useless as a
+    wrong one, and this is the cheapest place to stop it without dulling the
+    EWMA's ability to track the CV taper.
+    """
+    if new_w is None or new_w <= 0.0:
+        return None, 0
+    if prev_w is None or prev_w <= 0.0:
+        return new_w, 0
+    if prev_w / ratio <= new_w <= prev_w * ratio:
+        return new_w, 0
+    streak += 1
+    if streak >= needed:
+        return new_w, 0
+    return prev_w, streak
 
 
 def soc_slope_w(samples, wh_unit: int | None) -> float | None:

@@ -36,6 +36,7 @@ from .protocol import (
     runtime_estimate_minutes,
     stored_energy_wh,
     time_to_full_minutes,
+    ttf_rate_hysteresis,
     soc_slope_w,
     absorption_ewma_w,
     WH_PER_BATTERY_UNIT,
@@ -558,23 +559,29 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             # sits at 0 while 1.7 kW pours into the external packs (owner-
             # verified 2026-10-19) - reading only attr 24 said 'not
             # charging' mid-charge. Sum every path power can arrive by.
-            charge_w = self.coordinator.data["attrs"].get(24)
+            main_in = self.coordinator.data["attrs"].get(24)
             exts = self.coordinator.data.get("ext_batteries") or {}
+            ext_known = [ed for ed in exts.values() if isinstance(ed, dict)]
             ext_in = 0.0
-            any_ext = False
-            for ed in exts.values():
+            ext_reported = 0
+            for ed in ext_known:
                 # Raw slot dicts are keyed by firmware attr numbers: 53 is
                 # the pack's INPUT W (string keys like "input_power" live
                 # only in sensor descriptions, never in these dicts).
                 w = ed.get(53)
                 if isinstance(w, (int, float)) and not isinstance(w, bool):
-                    ext_in += w
-                    any_ext = True
-            total_charge = (charge_w or 0) + (ext_in if any_ext else 0)
-            if charge_w is None and not any_ext:
-                charge_w = None
-            else:
-                charge_w = total_charge
+                    ext_in += float(w)
+                    ext_reported += 1
+            any_ext = ext_reported > 0
+            # v1.4.18: a PARTIAL pack set is not a charge rate.  The station
+            # answers packs in turn, so a poll cycle in which only one of three
+            # externals replied summed ~800 W while the rack measurably took
+            # 2.9 kW - and every such sample printed an ETA 3-4x too long
+            # (field case 2026-10-23: 10h42m shown against a 2h42m truth).
+            # Only a COMPLETE set may drive the meter fallback; otherwise the
+            # tank-slope path alone decides, and we say 'measuring' if it cannot.
+            meters_complete = main_in is not None and ext_reported == len(ext_known)
+            charge_w = (float(main_in or 0.0) + ext_in) if meters_complete else None
             # Guardian quirk (field case 2026-10-21): the main unit's internal
             # pack input register (dpid 24) reports 0 W while solar charging
             # and its SoC climbs.  The pack's own SoC slope is the honest
@@ -617,6 +624,14 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 and (ext_in > 0 or net_input_w > 0)
             ):
                 charge_w = absorption
+            # An ETA that leaps around is as useless as a wrong one: hold the
+            # previous rate through single-sample artifacts and adopt a change
+            # only once it repeats (see protocol.ttf_rate_hysteresis).
+            charge_w, self._ttf_streak = ttf_rate_hysteresis(
+                getattr(self, "_ttf_rate_w", None), charge_w,
+                getattr(self, "_ttf_streak", 0),
+            )
+            self._ttf_rate_w = charge_w
             minutes = time_to_full_minutes(deficit, charge_w)
             if minutes is None:
                 # Refusal is not silence: answer with WHY (owner rule
@@ -629,6 +644,12 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 if status == "Full" or (deficit is not None and deficit <= 0.0):
                     return "Full"
                 if status == "Charging":
+                    # 'Nearly full' at 57% is a lie.  The honest rate source
+                    # (tank slope) needs ~5 min of history after a reload or a
+                    # reconnect; while it warms up, say exactly that rather
+                    # than inventing an almost-full battery.
+                    if deficit is None or deficit > 400.0:
+                        return "Measuring"
                     return "Nearly full"
                 return "Not charging"
             total = int(round(minutes))

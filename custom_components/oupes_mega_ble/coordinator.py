@@ -55,6 +55,16 @@ _LOGGER = logging.getLogger(__name__)
 OUPESData = dict
 
 
+_SAMPLE_MEMORY: dict[str, tuple[deque, deque]] = {}
+# v1.4.18: (soc_samples, energy_samples) per device address, kept process-wide.
+# A config-entry reload builds a brand-new coordinator whose deques start empty,
+# which blinded absorption_ewma_w for ABSORPTION_MIN_SPAN_S (5 min) and handed
+# time_to_full to the instantaneous meters - 3-4x too slow (field case
+# 2026-10-23).  An hour of (ts, Wh) pairs costs a few KB; sample timestamps are
+# time.monotonic(), so a cache from a previous HA process fails the window check
+# and is discarded rather than trusted.
+
+
 class OUPESMegaCoordinator(DataUpdateCoordinator):
     """Polls one OUPES Mega device via BLE on a fixed interval.
 
@@ -129,6 +139,12 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         # (monotonic_ts, total_stored_wh) - feeds protocol.absorption_ewma_w,
         # the honest time-to-full rate: what the Wh tank actually swallowed.
         self.energy_samples: deque = deque(maxlen=120)
+        # Inherit the previous coordinator's history for this address so a
+        # reload does not restart the 5-minute blind window (see _SAMPLE_MEMORY).
+        _mem = _SAMPLE_MEMORY.get(str(address))
+        if _mem is not None:
+            self.soc_samples, self.energy_samples = _mem
+        _SAMPLE_MEMORY[str(address)] = (self.soc_samples, self.energy_samples)
         self._continuous_task: asyncio.Task | None = None
         # Build Cmd2 query packets that read this device's supported settings.
         # Split into small batches (7 DPIDs each) matching the Cleanergy app.

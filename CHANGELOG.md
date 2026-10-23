@@ -8,6 +8,47 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## Unreleased
+
+### Fixed
+- **`Time To Full Charge` no longer abandons the honest rate for the meters.**
+  Owner field case 2026-10-23, a 4 h solar charge replayed from the HA recorder
+  (248 samples, least-squares absorption 2671 W): the sensor displayed **10h42m
+  against a measured 2h42m truth**, 25% of consecutive updates moved by 2 h or
+  more, and the worst sample read 56h12m.  Three causes, all in the ETA path:
+  - `absorption_ewma_w` mistook the Wh tank's own artifacts for lies about
+    physics.  `stored_energy_wh()` sums only the packs that ANSWERED, so one pack
+    skipping a poll cycle reads as ~700 Wh vanishing; and the tank is derived from
+    integer-percent SoC, so two resyncs inside a single 30 s pair imply >10 kW.
+    Any EWMA above `ABSORPTION_MAX_W` returned None, which silently handed the ETA
+    to the instantaneous meters.
+  - On a multi-pack rack those meters are not a charge rate: the main-pack input
+    register reports 0-67 W while the rack charges (firmware quirk), and BLE
+    answers packs in turn, so a cycle in which one of three externals replied
+    summed ~800 W of a measured 2900 W.  `sensor.py` now requires **every known
+    pack to have reported** before the meter sum may drive the ETA.
+  - A config-entry reload emptied `energy_samples`, reopening the
+    `ABSORPTION_MIN_SPAN_S` blind window exactly when the meters take over; an hour
+    of samples now survives the rebuild (`_SAMPLE_MEMORY`, keyed by MAC, and a
+    cache from a previous process fails the monotonic window check and is dropped).
+  Artifacts are now removed where they are created - drop-hole sample pairs are
+  skipped, spikes clipped and median-filtered - and an over-cap EWMA is clamped
+  instead of refused, while a window that is *entirely* beyond physics still
+  refuses as before (that invariant is `test_glitch_beyond_physics_is_refused`).
+  Replaying the same recording: refused samples 59% -> 13%, median rate used
+  5025 W -> 2940 W (truth 2671 W), median ETA error 133 min -> 50 min.
+- **Refusal text is honest.**  The sensor said `Nearly full` at 57% SoC while the
+  rate source was still warming up; it now answers `Measuring` until the deficit
+  is genuinely under 400 Wh.
+
+### Added
+- `protocol.ttf_rate_hysteresis`: a candidate rate must disagree three
+  consecutive times before it replaces the held one, so a one-sample artifact
+  cannot move the displayed ETA while a real CV taper still tracks within ~90 s.
+- `tests/test_absorption_artifacts.py` (6 tests) pins the reporting hole, the
+  resync step, the still-refused counter lie, the hysteresis and the pack
+  completeness gate.
+
 ## 1.4.18 - 2026-10-23 (owner field-test 2026-10-22)
 
 ### Fixed
