@@ -56,7 +56,7 @@ OUPESData = dict
 
 
 _SAMPLE_MEMORY: dict[str, tuple[deque, deque]] = {}
-# v1.4.18: (soc_samples, energy_samples) per device address, kept process-wide.
+# v1.4.19: (soc_samples, energy_samples) per device address, kept process-wide.
 # A config-entry reload builds a brand-new coordinator whose deques start empty,
 # which blinded absorption_ewma_w for ABSORPTION_MIN_SPAN_S (5 min) and handed
 # time_to_full to the instantaneous meters - 3-4x too slow (field case

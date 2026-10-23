@@ -1109,7 +1109,7 @@ def absorption_ewma_w(samples) -> float | None:
     Returns the smoothed rate (may be <= 0 - caller's reject rules handle
     it), or None when history is too short, too stale, or implausible.
 
-    v1.4.18 (field case 2026-10-23, 4 h solar charge): stored_energy_wh() sums
+    v1.4.19 (field case 2026-10-23, 4 h solar charge): stored_energy_wh() sums
     only the packs that ANSWERED, and it is derived from integer-percent SoC, so
     the series is a staircase with holes - a dropped pack reply reads as hundreds
     of Wh vanishing, and two SoC resyncs in one 30 s pair read as >10 kW.  Both

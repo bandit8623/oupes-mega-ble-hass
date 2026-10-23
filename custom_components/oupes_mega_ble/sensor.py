@@ -573,7 +573,7 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                     ext_in += float(w)
                     ext_reported += 1
             any_ext = ext_reported > 0
-            # v1.4.18: a PARTIAL pack set is not a charge rate.  The station
+            # v1.4.19: a PARTIAL pack set is not a charge rate.  The station
             # answers packs in turn, so a poll cycle in which only one of three
             # externals replied summed ~800 W while the rack measurably took
             # 2.9 kW - and every such sample printed an ETA 3-4x too long

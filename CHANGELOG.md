@@ -8,7 +8,7 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
-## Unreleased
+## 1.4.19 - 2026-10-23 (owner field case, same 4-pack Guardian rack)
 
 ### Fixed
 - **`Time To Full Charge` no longer abandons the honest rate for the meters.**
