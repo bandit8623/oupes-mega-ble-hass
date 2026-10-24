@@ -865,6 +865,52 @@ _MIN_MEANINGFUL_LOAD_W = 5.0
 _MAX_MEANINGFUL_RUNTIME_MIN = 7 * 24 * 60  # one week
 
 
+PACK_SOC_HOLD_S: float = 600.0
+
+
+def merge_held_pack_socs(
+    ext_batteries: dict[int, dict[int, int]] | None,
+    held: dict[int, tuple[float, int]] | None,
+    now_s: float,
+    hold_s: float = PACK_SOC_HOLD_S,
+) -> tuple[dict[int, dict[int, int]], dict[int, tuple[float, int]]]:
+    """Hold each pack slot's last reported SoC (dpid 79) across silent polls.
+
+    Field case 2026-10-24 overnight charge: one missed BLE answer drops an
+    entire expansion pack from the poll set, and because average_pack_soc and
+    stored_energy_wh *skip silent slots*, the Combined Battery Reserve and
+    Battery Energy Stored sensors - and the time-to-full rate derived from
+    them - lose a whole pack's energy for one sample.  The soak log caught
+    -8893 Wh / +8847 Wh round-trips caused by exactly this.
+
+    Rule: a slot that reported dpid 79 updates the hold; a slot silent this
+    poll keeps counting at its held SoC for ``hold_s`` seconds (BLE blip);
+    after that it is dropped (the pack is really gone - a genuine disconnect
+    must still step the total, silently and forever is worse).  A reported 0
+    is real data and overwrites the hold.  Slots that never reported at all
+    are never injected (cold start keeps reporting Unknown until first byte).
+
+    Returns (merged_ext_batteries, new_held).  Pure: the caller owns the
+    clock (``now_s``) and the returned hold, which keeps this testable and
+    safe to call from anywhere.
+    """
+    merged: dict[int, dict[int, int]] = {
+        slot: dict(sd or {}) for slot, sd in (ext_batteries or {}).items()
+    }
+    new_held: dict[int, tuple[float, int]] = {}
+    for slot, sd in merged.items():
+        soc = sd.get(79)
+        if isinstance(soc, int):
+            new_held[slot] = (now_s, soc)
+    for slot, (ts, soc) in (held or {}).items():
+        if slot in new_held:
+            continue
+        if now_s - ts <= hold_s:
+            new_held[slot] = (ts, soc)
+            merged.setdefault(slot, {})[79] = soc
+    return merged, new_held
+
+
 def stored_energy_wh(
     series: str,
     attrs: dict[int, int],
@@ -1086,6 +1132,7 @@ ABSORPTION_MAX_SPAN_S = 1800     # EWMA window: only the last 30 min describe th
 ABSORPTION_MAX_W      = 8000.0   # a Guardian rack takes at most ~5 kW; above is a counter glitch
 ABSORPTION_EWMA_ALPHA = 0.35     # ~3 recent samples dominate: tracks the CV taper within minutes
 ABSORPTION_DROP_TOL_WH = 250.0   # 4 packs x a 1% SoC step; a bigger 30s fall never emptied
+ABSORPTION_CHORD_MIN_SPAN_S = 420  # chord needs 7 min of window: 9 steps of 46 Wh = enough signal
                                  # the rack, it means a pack stopped ANSWERING the poll
 ABSORPTION_OUTLIER_W   = 1500.0  # slack above the median slope tolerated before a sample is
                                  # treated as a BMS re-estimate step
@@ -1197,6 +1244,59 @@ def ttf_rate_hysteresis(prev_w, new_w, streak: int,
     if streak >= needed:
         return new_w, 0
     return prev_w, streak
+
+
+def absorption_chord_w(samples) -> float | None:
+    """Chord (endpoint) absorption rate W over the recent stored-Wh window.
+
+    Same samples as absorption_ewma_w - (monotonic_s, total_stored_wh) - but
+    the RATE IS (newest_wh - oldest_wh) / span, not an average of 30 s pair
+    slopes.  The difference is everything on a real rack, because
+    total_stored_wh is built from integer-percent SoC: the series is a
+    staircase whose steps land every few minutes (46 Wh = one pack one %).
+    Pairwise slopes of a staircase are mostly EXACTLY ZERO between steps and
+    huge on a step; an EWMA/median of those slopes is dominated by the zeros,
+    decays toward 0 between steps, and the ETA doubles per poll until the
+    next step lands.  Owner's overnight soak 2026-10-24 caught all of it live
+    (468 state changes, `2h -> 4h -> 8h -> 34h -> 99h` ladders snapping back
+    to `2h 50m`, exactly at 30 s poll cadence).
+
+    The chord over a multi-minute window integrates the steps instead of
+    differentiating them: one 46 Wh step every ~2.7 min = a steady 1.7 kW,
+    whatever the quantization phase.  Quantization jitter (+/-1% register
+    bounce) cancels inside the window; pack-set dropouts cannot reach this
+    number anymore because _record_energy samples the HELD aggregates (see
+    merge_held_pack_socs) - the remaining defense is to refuse chords whose
+    endpoints disagree by an implausible drop.
+
+    Returns None when history is too short (<7 min span) or the window ended
+    in a level reset; the caller falls back to the complete-set meters and
+    prints 'measuring' if neither path can answer.
+    """
+    pts = [(ts, wh) for ts, wh in samples
+           if isinstance(wh, (int, float)) and not isinstance(wh, bool)]
+    if len(pts) < 2:
+        return None
+    newest_ts = pts[-1][0]
+    pts = [p for p in pts if 0 <= newest_ts - p[0] <= ABSORPTION_MAX_SPAN_S]
+    if len(pts) < 2:
+        return None
+    span = pts[-1][0] - pts[0][0]
+    if span < ABSORPTION_CHORD_MIN_SPAN_S:
+        return None
+    dwh = pts[-1][1] - pts[0][1]
+    if dwh < -ABSORPTION_DROP_TOL_WH:
+        # The tank never loses this much in 30 min; the counter jumped (pack
+        # set genuinely changed, or samples were inherited across a reload
+        # with different packs reporting).  Refuse rather than print a
+        # negative-driven ETA.
+        return None
+    rate = dwh / (span / 3600.0)
+    if rate > ABSORPTION_MAX_W:
+        return None
+    if rate <= 0.0:
+        return None
+    return round(rate, 1)
 
 
 def soc_slope_w(samples, wh_unit: int | None) -> float | None:

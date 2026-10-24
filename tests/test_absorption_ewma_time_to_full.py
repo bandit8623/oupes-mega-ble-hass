@@ -134,11 +134,11 @@ def test_deficit_side_still_uses_the_single_inclusion_rule():
 def test_sensor_prefers_absorption_behind_the_charging_gate():
     src = (Path(__file__).resolve().parents[1] / "custom_components" /
            "oupes_mega_ble" / "sensor.py").read_text(encoding="utf-8")
-    seg = src[src.index("absorption = absorption_ewma_w"):src.index("minutes = time_to_full_minutes(deficit, charge_w)")]
+    seg = src[src.index("absorption = absorption_chord_w"):src.index("minutes = time_to_full_minutes(deficit, charge_w)")]
     assert "energy_samples" in seg
     assert "absorption > 0.0" in seg
     assert "ext_in > 0 or net_input_w > 0" in seg   # same evidence gate as soc_slope
-    assert src.count("absorption = absorption_ewma_w") == 1
+    assert src.count("absorption = absorption_chord_w") == 1
 
 
 def test_coordinator_records_and_throttles_energy_samples():
@@ -153,5 +153,5 @@ def test_coordinator_records_and_throttles_energy_samples():
 
 def test_absorption_imported_where_used():
     base = Path(__file__).resolve().parents[1] / "custom_components" / "oupes_mega_ble"
-    assert "absorption_ewma_w" in (base / "sensor.py").read_text(encoding="utf-8")
-    assert "def absorption_ewma_w" in (base / "protocol.py").read_text(encoding="utf-8")
+    assert "absorption_chord_w" in (base / "sensor.py").read_text(encoding="utf-8")
+    assert "def absorption_chord_w" in (base / "protocol.py").read_text(encoding="utf-8")

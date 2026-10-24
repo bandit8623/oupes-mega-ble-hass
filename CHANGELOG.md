@@ -8,6 +8,33 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.20 - 2026-10-24 (owner overnight soak, same 4-pack Guardian rack)
+
+### Fixed
+- **A pack that skips one BLE answer no longer deletes its ~3 kWh from every
+  aggregate.** `stored_energy_wh()`/`average_pack_soc()` silently skip silent
+  slots, so one missed dpid 79 reply blinked Combined Battery Reserve, Battery
+  Energy Stored and the ETA by a whole pack.  The soak log caught the exact
+  signature: `-8893 Wh / +8847 Wh` round-trips, 60 of them overnight.
+  `merge_held_pack_socs()` keeps each slot's last SoC for 10 min (BLE blip =
+  held; genuinely unplugged for 10 min = dropped, so real disconnects still
+  move the total).  Aggregates - Combined Battery Reserve, Battery Energy
+  Stored, the ETA's sample series - read the held view; per-pack raw entities
+  still go Unknown the moment their pack stops answering.
+- **`Time To Full Charge` sawtooth, the real root cause.** The soak captured
+  468 ETA state changes with perfect doubling ladders - `2h -> 4h -> 8h ->
+  34h -> 65h -> 99h` snapping back to `2h 50m` - on a rack charging steadily
+  at ~1.7 kW.  Cause: SoC registers are INTEGER percents, so the stored-Wh
+  tank is a staircase of 46 Wh steps, and `absorption_ewma_w` differentiates
+  30 s pairs of it: between steps every pairwise slope is exactly 0, the
+  median-clipped EWMA decays toward zero, and the ETA doubles once per poll
+  until the next step lands.  Replaced with `absorption_chord_w`: the endpoint
+  chord over a 7-30 min window integrates the steps instead of differentiating
+  them, so the rate is steady whatever the quantization phase.  The 10-22
+  meter-under-read case keeps the chord as primary over the meters; the
+  meters stay the complete-set cold-start path; `Measuring` still answers
+  while history is too short.
+
 ## 1.4.19 - 2026-10-23 (owner field case, same 4-pack Guardian rack)
 
 ### Fixed

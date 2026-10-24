@@ -40,7 +40,9 @@ from .protocol import (
     KEEPALIVE_INTERVAL,
     KEEPALIVE_PKT,
     NOTIFY_CHAR_UUID,
+    PACK_SOC_HOLD_S,
     WRITE_CHAR_UUID,
+    merge_held_pack_socs,
     parse_ble_packet,
     parse_packet_sequence,
     product_uses_packed_power,
@@ -139,6 +141,11 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         # (monotonic_ts, total_stored_wh) - feeds protocol.absorption_ewma_w,
         # the honest time-to-full rate: what the Wh tank actually swallowed.
         self.energy_samples: deque = deque(maxlen=120)
+        # slot -> (monotonic_ts, last reported dpid 79 SoC).  Keeps one missed
+        # BLE answer from dropping a whole pack out of the aggregate sensors
+        # (see protocol.merge_held_pack_socs; field case -8.9 kWh single-sample
+        # dropout, 2026-10-24 charge soak).
+        self._pack_soc_hold: dict[int, tuple[float, int]] = {}
         # Inherit the previous coordinator's history for this address so a
         # reload does not restart the 5-minute blind window (see _SAMPLE_MEMORY).
         _mem = _SAMPLE_MEMORY.get(str(address))
@@ -424,6 +431,27 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                 return
             self.soc_samples.append((now, soc))
 
+    def effective_ext_batteries(
+        self, data: OUPESData | None = None
+    ) -> dict[int, dict[int, int]]:
+        """Poll-set pack slots with dpid 79 held across silent polls.
+
+        Use for AGGREGATES only (average_pack_soc, stored_energy_wh, the
+        energy-rate samples): those must not blink by a whole pack when one
+        BLE answer is lost.  The per-pack raw entities keep reading
+        ``data["ext_batteries"]`` directly, so 'External Battery N Charge'
+        still goes Unknown the moment its pack stops answering - the honest
+        per-device view and the stable fleet view stay separate.
+        """
+        data = data if data is not None else (self.data or {})
+        merged, self._pack_soc_hold = merge_held_pack_socs(
+            (data or {}).get("ext_batteries"),
+            self._pack_soc_hold,
+            _time.monotonic(),
+            PACK_SOC_HOLD_S,
+        )
+        return merged
+
     def _record_energy(self, data: OUPESData) -> None:
         """Keep (monotonic_ts, total_stored_wh) for protocol.absorption_ewma_w.
 
@@ -436,7 +464,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         stored = stored_energy_wh(
             self.product_series or "",
             data.get("attrs") or {},
-            data.get("ext_batteries"),
+            self.effective_ext_batteries(data),
         )
         if stored is not None:
             now = _time.monotonic()
