@@ -1336,6 +1336,37 @@ def soc_slope_w(samples, wh_unit: int | None) -> float | None:
     return round(watts, 1)
 
 
+METER_TRUST_RATIO = 2.0
+METER_TRUST_MARGIN_W = 400.0
+
+
+def meter_priority_w(slope_w, meters_w,
+                     ratio: float = METER_TRUST_RATIO,
+                     margin: float = METER_TRUST_MARGIN_W) -> float | None:
+    """Reconcile an inferred tank-slope rate with measured pack-side watts.
+
+    v1.4.21.  The stored-Wh chord is the primary ETA rate (v1.4.20), but the
+    BMS clamps its SoC/Wh registers at the deep bottom while real current
+    flows: owner report 2026-10-25 showed `9h` ETA with 4.0 kW demonstrably
+    entering a sub-5% rack.  The same staircase-blindness bites the first
+    minutes after a charge starts (field trace 2026-10-25 05:08: `97h 40m`
+    while 3 kW+ filled the packs) because the window contains one quantized
+    step at most.
+
+    Rule: a COMPLETE set of pack-side watt meters is physical; a slope
+    inferred from clamped registers is not.  When the meters exceed the
+    slope by `ratio`x plus `margin` W, the meters win.  Incomplete meter
+    sets (some pack silent this poll) never override - that partial-set
+    under-reading is exactly the 2026-10-22 case the chord was built to
+    survive, so in that world the slope stays king.
+    """
+    if meters_w is None or meters_w <= 0.0:
+        return slope_w if (slope_w is not None and slope_w > 0.0) else None
+    if slope_w is None or slope_w <= 0.0:
+        return meters_w
+    return meters_w if meters_w >= ratio * slope_w + margin else slope_w
+
+
 def sane_expansion_count(raw) -> int | None:
     """Gate for dpid 51 (expansion pack count).
 

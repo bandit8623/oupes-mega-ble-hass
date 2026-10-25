@@ -39,6 +39,7 @@ from .protocol import (
     ttf_rate_hysteresis,
     soc_slope_w,
     absorption_chord_w,
+    meter_priority_w,
     WH_PER_BATTERY_UNIT,
     total_load_w,
     awake_idle_draw_w,
@@ -605,6 +606,10 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 )
                 if slope:
                     charge_w += slope
+            # v1.4.21: freeze the meter-only rate before the tank slope takes
+            # over, so the clamped-register guard can weigh physical watts
+            # against the inferred slope (meter_priority_w).
+            meters_w = charge_w
             # Field case 2026-10-22 night charge: the summed instantaneous
             # meters read 1.86 kW while the stored-Wh tank demonstrably
             # filled at 2.90 kW (a partial pack set, see above) - so the
@@ -625,7 +630,15 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 and absorption > 0.0
                 and (ext_in > 0 or net_input_w > 0)
             ):
-                charge_w = absorption
+                # v1.4.21: chord stays primary EXCEPT when complete pack-side
+                # meters out-run it by >2x + 400 W - the signature of clamped
+                # SoC/Wh registers (deep-bottom hold: owner saw 9h at 4 kW;
+                # first-minutes staircase: 97h while 3 kW+ flowed).  An
+                # incomplete meter set never overrides (2026-10-22 case).
+                charge_w = meter_priority_w(
+                    absorption,
+                    meters_w if meters_complete else None,
+                )
             # An ETA that leaps around is as useless as a wrong one: hold the
             # previous rate through single-sample artifacts and adopt a change
             # only once it repeats (see protocol.ttf_rate_hysteresis).
