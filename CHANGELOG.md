@@ -8,6 +8,30 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.21 - 2026-10-25 (owner field reports: deep-bottom ETA lie + cold-start blind spot)
+
+Two related time-to-full fixes, both born from owner field traces.
+
+* **Meter priority over clamped registers.**  Below ~5% SoC the ETA could
+  read hours while kilowatts poured in (`9h` at a measured 4.0 kW): the
+  BMS freezes its SoC/stored-Wh registers during the bottom
+  pre-charge/balance hold, so the v1.4.20 Wh-chord rate became a trickle
+  while the pack-side watt meters told the truth.  New
+  `protocol.meter_priority_w`: when a COMPLETE set of pack-side meters
+  out-runs the inferred chord by >2x + 400 W, the meters win.  An
+  incomplete meter set never overrides - the 2026-10-22 partial-set
+  under-read (1.86 kW vs a true 2.9 kW) stays protected, with regression
+  tests pinned to both field traces.
+
+* **Cold-start provisional rate.**  After a full HA restart time-to-full
+  answered `Measuring` for minutes while the main unit's AC net input
+  plainly showed kilowatts flowing in - the Wh window had no history yet
+  and the pack-side meter set was incomplete.  The main unit's
+  net AC input (dpid 21 - dpid 4) now fills just that hole as a
+  provisional rate, clamped to the rack ceiling and outranked the moment
+  the chord or a complete meter set qualifies.  First ETA after a cold
+  boot is now a real number, not a wait.
+
 ## 1.4.20 - 2026-10-24 (owner overnight soak, same 4-pack Guardian rack)
 
 ### Fixed
