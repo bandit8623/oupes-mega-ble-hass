@@ -40,6 +40,7 @@ from .protocol import (
     soc_slope_w,
     absorption_chord_w,
     meter_priority_w,
+    cold_start_rate_w,
     WH_PER_BATTERY_UNIT,
     total_load_w,
     awake_idle_draw_w,
@@ -639,6 +640,14 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                     absorption,
                     meters_w if meters_complete else None,
                 )
+            # v1.4.21 cold-start hole: full HA restart flushed the Wh window
+            # and the pack-side meter set is incomplete, yet the main unit's
+            # AC net input (dpid 21 - dpid 4) plainly shows kilowatts going
+            # in.  A provisional rate beats `Measuring` for those first
+            # minutes; it steps down the moment the chord or a complete
+            # meter set qualifies (both outrank it above).
+            if (charge_w is None or charge_w <= 0.0) and absorption is None:
+                charge_w = cold_start_rate_w(net_input_w)
             # An ETA that leaps around is as useless as a wrong one: hold the
             # previous rate through single-sample artifacts and adopt a change
             # only once it repeats (see protocol.ttf_rate_hysteresis).

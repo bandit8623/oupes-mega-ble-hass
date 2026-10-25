@@ -1367,6 +1367,31 @@ def meter_priority_w(slope_w, meters_w,
     return meters_w if meters_w >= ratio * slope_w + margin else slope_w
 
 
+def cold_start_rate_w(net_input_w):
+    """v1.4.21: provisional ETA rate for a cold sample window.
+
+    Owner review 2026-10-25: `estimated_runtime_left` arms instantly
+    because its divisor is one always-present register (main AC output),
+    while time-to-full answered `Measuring` for minutes on a full HA
+    restart although dpid 21 (total AC input) minus dpid 4 (output) was
+    plainly showing kilowatts flowing in.  Both live where the stored-Wh
+    chord has no window yet AND the pack-side meter set is incomplete
+    (a silent pack under-read is exactly what the chord exists to
+    survive, so it must not divide by that).
+
+    The main unit's AC net input sees everything the home draws and
+    everything flowing through the inverter, but NOT external packs
+    charging from their own DC inputs, so it is provisional-grade: use
+    it to fill the cold-start hole, never over a trusted chord or a
+    complete meter set.  Clamped to the same rack ceiling as the chord.
+    """
+    if net_input_w is None or net_input_w <= 0.0:
+        return None
+    if net_input_w > ABSORPTION_MAX_W:
+        return None
+    return round(float(net_input_w), 1)
+
+
 def sane_expansion_count(raw) -> int | None:
     """Gate for dpid 51 (expansion pack count).
 
