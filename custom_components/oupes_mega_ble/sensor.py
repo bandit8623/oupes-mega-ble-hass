@@ -36,6 +36,7 @@ from .protocol import (
     runtime_estimate_minutes,
     stored_energy_wh,
     time_to_full_minutes,
+    net_input_charge_rate_w,
     ttf_rate_hysteresis,
     soc_slope_w,
     absorption_chord_w,
@@ -556,98 +557,114 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
                 self.coordinator.data["attrs"],
                 self.coordinator.data.get("ext_batteries"),
             )
-            # True charge power = internal pack meter PLUS every external
-            # pack's input meter. On a stacked Guardian the internal meter
-            # sits at 0 while 1.7 kW pours into the external packs (owner-
-            # verified 2026-10-19) - reading only attr 24 said 'not
-            # charging' mid-charge. Sum every path power can arrive by.
-            main_in = self.coordinator.data["attrs"].get(24)
-            exts = self.coordinator.data.get("ext_batteries") or {}
-            ext_known = [ed for ed in exts.values() if isinstance(ed, dict)]
-            ext_in = 0.0
-            ext_reported = 0
-            for ed in ext_known:
-                # Raw slot dicts are keyed by firmware attr numbers: 53 is
-                # the pack's INPUT W (string keys like "input_power" live
-                # only in sensor descriptions, never in these dicts).
-                w = ed.get(53)
-                if isinstance(w, (int, float)) and not isinstance(w, bool):
-                    ext_in += float(w)
-                    ext_reported += 1
-            any_ext = ext_reported > 0
-            # v1.4.19: a PARTIAL pack set is not a charge rate.  The station
-            # answers packs in turn, so a poll cycle in which only one of three
-            # externals replied summed ~800 W while the rack measurably took
-            # 2.9 kW - and every such sample printed an ETA 3-4x too long
-            # (field case 2026-10-23: 10h42m shown against a 2h42m truth).
-            # Only a COMPLETE set may drive the meter fallback; otherwise the
-            # tank-slope path alone decides, and we say 'measuring' if it cannot.
-            meters_complete = main_in is not None and ext_reported == len(ext_known)
-            charge_w = (float(main_in or 0.0) + ext_in) if meters_complete else None
-            # Guardian quirk (field case 2026-10-21): the main unit's internal
-            # pack input register (dpid 24) reports 0 W while solar charging
-            # and its SoC climbs.  The pack's own SoC slope is the honest
-            # pack-side stand-in.  Gated to real charging windows: EITHER an
-            # external pack measurably accepting watts, OR net input (dpid 21
-            # - dpid 4) above zero - which is what lets a MAIN-UNIT-ONLY
-            # install (no externals at all) get the same fix.  The slope
-            # describes the one main unit exactly once, whatever the rack size.
+            # v1.4.23 OWNER-MATH PRIMARY (owner directive 2026-11-01: "it
+            # should be simple - base it off usage and total input, we
+            # don't need an hour of data to calculate this").  The
+            # station's own inlet registers already answer the question:
+            # everything flowing in (dpid 21 - solar, grid, whatever) minus
+            # what the house takes on the AC output (dpid 4) IS the charge
+            # rate; one measured constant (protocol.CHARGE_PATH_EFFICIENCY,
+            # fitted from the stored-Wh tank slope against net input on two
+            # live Guardian sessions) turns it into pack-side watts.  No
+            # history, no windows: correct on the first update of a charge
+            # session, tracks cloud edges and load steps live.  The whole
+            # meter/chord machinery below now runs ONLY as fallback for
+            # series without a measured efficiency or when the inlet
+            # registers themselves are silent.
             net_input_w = (
                 (self.coordinator.data["attrs"].get(21) or 0)
                 - (self.coordinator.data["attrs"].get(4) or 0)
             )
-            if charge_w is not None and (
-                ext_in > 0 or net_input_w > 0
-            ) and (
-                self.coordinator.data["attrs"].get(24) or 0
-            ) <= 0:
-                slope = soc_slope_w(
-                    getattr(self.coordinator, "soc_samples", ()),
-                    WH_PER_BATTERY_UNIT.get(self.coordinator.product_series),
-                )
-                if slope:
-                    charge_w += slope
-            # v1.4.21: freeze the meter-only rate before the tank slope takes
-            # over, so the clamped-register guard can weigh physical watts
-            # against the inferred slope (meter_priority_w).
-            meters_w = charge_w
-            # Field case 2026-10-22 night charge: the summed instantaneous
-            # meters read 1.86 kW while the stored-Wh tank demonstrably
-            # filled at 2.90 kW (a partial pack set, see above) - so the
-            # tank's own slope stays primary over the meters.
-            # Field case 2026-10-24 overnight soak: the EWMA-of-pair-slopes
-            # implementation was itself the artifact on quantized SoC -
-            # between 46 Wh staircase steps its input is exactly 0 and the
-            # ETA doubled per poll (`2h->4h->8h->34h->99h`, 468-change
-            # recorder capture).  absorption_chord_w integrates the steps
-            # over a 7-30 min window instead of averaging their slopes, and
-            # the samples it sees are pack-held (merge_held_pack_socs), so
-            # single dropped replies can no longer move the endpoints.
-            absorption = absorption_chord_w(
-                getattr(self.coordinator, "energy_samples", ())
+            charge_w = net_input_charge_rate_w(
+                net_input_w, self.coordinator.product_series,
             )
-            if (
-                absorption is not None
-                and absorption > 0.0
-                and (ext_in > 0 or net_input_w > 0)
-            ):
-                # v1.4.21: chord stays primary EXCEPT when complete pack-side
-                # meters out-run it by >2x + 400 W - the signature of clamped
-                # SoC/Wh registers (deep-bottom hold: owner saw 9h at 4 kW;
-                # first-minutes staircase: 97h while 3 kW+ flowed).  An
-                # incomplete meter set never overrides (2026-10-22 case).
-                charge_w = meter_priority_w(
-                    absorption,
-                    meters_w if meters_complete else None,
+            if charge_w is None:
+                # True charge power = internal pack meter PLUS every
+                # external pack's input meter.  On a stacked Guardian the
+                # internal meter sits at 0 while 1.7 kW pours into the
+                # external packs (owner-verified 2026-10-19) - reading only
+                # attr 24 said 'not charging' mid-charge.  Sum every path
+                # power can arrive by.
+                main_in = self.coordinator.data["attrs"].get(24)
+                exts = self.coordinator.data.get("ext_batteries") or {}
+                ext_known = [ed for ed in exts.values() if isinstance(ed, dict)]
+                ext_in = 0.0
+                ext_reported = 0
+                for ed in ext_known:
+                    # Raw slot dicts are keyed by firmware attr numbers: 53
+                    # is the pack's INPUT W (string keys like "input_power"
+                    # live only in sensor descriptions, never here).
+                    w = ed.get(53)
+                    if isinstance(w, (int, float)) and not isinstance(w, bool):
+                        ext_in += float(w)
+                        ext_reported += 1
+                any_ext = ext_reported > 0
+                # v1.4.19: a PARTIAL pack set is not a charge rate.  The
+                # station answers packs in turn, so a poll cycle in which
+                # only one of three externals replied summed ~800 W while
+                # the rack measurably took 2.9 kW - every such sample
+                # printed an ETA 3-4x too long (field case 2026-10-23:
+                # 10h42m shown against a 2h42m truth).  Only a COMPLETE set
+                # may drive the meter fallback; otherwise the tank-slope
+                # path alone decides, and we say 'measuring' if it cannot.
+                meters_complete = (
+                    main_in is not None
+                    and ext_reported == len(ext_known)
                 )
-            # v1.4.21 cold-start hole: full HA restart flushed the Wh window
-            # and the pack-side meter set is incomplete, yet the main unit's
-            # AC net input (dpid 21 - dpid 4) plainly shows kilowatts going
-            # in.  A provisional rate beats `Measuring` for those first
-            # minutes; it steps down the moment the chord or a complete
-            # meter set qualifies (both outrank it above).
-            if (charge_w is None or charge_w <= 0.0) and absorption is None:
-                charge_w = cold_start_rate_w(net_input_w)
+                charge_w = (
+                    (float(main_in or 0.0) + ext_in) if meters_complete
+                    else None
+                )
+                # Guardian quirk (field case 2026-10-21): the main unit's
+                # internal pack input register (dpid 24) reports 0 W while
+                # solar charging and its SoC climbs.  The pack's own SoC
+                # slope is the honest pack-side stand-in, added exactly
+                # once whatever the rack size.
+                if charge_w is not None and (
+                    ext_in > 0 or net_input_w > 0
+                ) and (
+                    self.coordinator.data["attrs"].get(24) or 0
+                ) <= 0:
+                    slope = soc_slope_w(
+                        getattr(self.coordinator, "soc_samples", ()),
+                        WH_PER_BATTERY_UNIT.get(self.coordinator.product_series),
+                    )
+                    if slope:
+                        charge_w += slope
+                # v1.4.21: freeze the meter-only rate before the tank slope
+                # takes over, so the clamped-register guard can weigh
+                # physical watts against the inferred slope
+                # (meter_priority_w).
+                meters_w = charge_w
+                # Field case 2026-10-22 night charge: the summed
+                # instantaneous meters read 1.86 kW while the stored-Wh
+                # tank demonstrably filled at 2.90 kW - the tank's own
+                # slope stays primary over the meters.  Field case
+                # 2026-10-24: pairwise slopes of the quantized staircase
+                # were themselves the artifact; absorption_chord_w
+                # integrates 46 Wh steps over a 7-30 min window instead.
+                absorption = absorption_chord_w(
+                    getattr(self.coordinator, "energy_samples", ())
+                )
+                if (
+                    absorption is not None
+                    and absorption > 0.0
+                    and (ext_in > 0 or net_input_w > 0)
+                ):
+                    # v1.4.21: chord stays primary EXCEPT when complete
+                    # pack-side meters out-run it by >2x + 400 W - the
+                    # signature of clamped SoC/Wh registers.  An incomplete
+                    # meter set never overrides (2026-10-22 case).
+                    charge_w = meter_priority_w(
+                        absorption,
+                        meters_w if meters_complete else None,
+                    )
+                # v1.4.21 cold-start hole: no chord window yet AND an
+                # incomplete meter set, yet the AC net input plainly shows
+                # kilowatts flowing in - a provisional rate beats
+                # `Measuring` for those first minutes.
+                if (charge_w is None or charge_w <= 0.0) and absorption is None:
+                    charge_w = cold_start_rate_w(net_input_w)
             # An ETA that leaps around is as useless as a wrong one: hold the
             # previous rate through single-sample artifacts and adopt a change
             # only once it repeats (see protocol.ttf_rate_hysteresis).

@@ -1385,6 +1385,42 @@ def meter_priority_w(slope_w, meters_w,
     return meters_w if meters_w >= ratio * slope_w + margin else slope_w
 
 
+# Charge-path efficiency: battery-side Wh absorbed per watt of net DC-side
+# input (dpid 21 - dpid 4).  Fitted from the owner's stored-Wh tank slope
+# against (input - load) on two Guardian V2 sessions, 2026-11-01: 0.85
+# (05:00 UTC transfer charge, tank +2633 W on 3100 W net) and 0.93 (21:30
+# evening charge, +2968 W on ~3200 W net).  One constant centred between;
+# +/-10% is the honest error bar, and it still beats every windowed
+# estimator it now outranks - those were 3-16x wrong during regime changes
+# (field cases 2026-10-31 night and 2026-11-01 morning), this is never more
+# than a step behind the input registers themselves.
+CHARGE_PATH_EFFICIENCY: dict[str, float] = {
+    "guardian": 0.89,
+}
+
+
+def net_input_charge_rate_w(net_input_w, series) -> float | None:
+    """v1.4.23 primary time-to-full rate: net inlet W -> pack-side W.
+
+    Owner directive 2026-11-01: 'it should be simple - base it off usage
+    and total input, we don't need an hour of data to calculate this.'
+    Right: dpid 21 already measures everything entering the station and
+    dpid 4 everything leaving it; the difference IS the charge rate, and
+    one measured constant turns it into pack-side watts.  No history, no
+    windows: correct on the first update of a charge session, and it
+    tracks cloud edges and load steps live.  Series without a measured
+    efficiency get None and keep the meter/chord machinery as fallback.
+    """
+    eff = CHARGE_PATH_EFFICIENCY.get(series)
+    if eff is None:
+        return None
+    if not isinstance(net_input_w, (int, float)) or isinstance(net_input_w, bool):
+        return None
+    if net_input_w <= 0.0:
+        return None
+    return round(float(net_input_w) * eff, 1)
+
+
 def cold_start_rate_w(net_input_w):
     """v1.4.21: provisional ETA rate for a cold sample window.
 
