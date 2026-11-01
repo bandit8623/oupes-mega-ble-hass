@@ -21,6 +21,16 @@ required. This build is maintained and tested against the
 > [`pull/13`](https://github.com/acalcutt/oupes-mega-ble-hass/pull/13) for the
 > upstream pull request; if that merges, this fork becomes redundant and the
 > upstream repo should be preferred.
+>
+> As of v1.4.22 (2026-11-01) the upstream repository sits at version 1.2.0
+> (last commit 2026-08-25) on a history with no common ancestor with this
+> fork; a full branch-by-branch audit found nothing upstream carries that
+> this fork lacks - this build supersedes it entirely, and there is nothing
+> to merge back or forward.  Upstream's `wifi-proxy` branch hosts a separate
+> LAN/WiFi *transport* plugin (`oupes_mega_wifi_proxy`: TCP proxy, SiBo
+> status server, `ble_confignet` provisioning) - a known alternative for
+> Mega/Exodus owners who cannot use BLE, not a candidate for merging here,
+> and unusable on Guardian `WP` firmware anyway - see the WiFi note below.
 
 > **WiFi does not work on Guardian / D5 V2 / D5 6000 Plus stations.** A separate
 > [WiFi integration](https://github.com/acalcutt/oupes-mega-wifi-hass) exists - HACS
