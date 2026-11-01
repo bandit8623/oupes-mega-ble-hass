@@ -1272,6 +1272,20 @@ def absorption_chord_w(samples) -> float | None:
     Returns None when history is too short (<7 min span) or the window ended
     in a level reset; the caller falls back to the complete-set meters and
     prints 'measuring' if neither path can answer.
+
+    v1.4.22 regime-V clamp: the window is 30 min wide and knows nothing
+    about the regime it spans.  Field case 2026-10-31 21:29 CDT: the rack
+    discharged for 70 min (house on battery, tank FALLING ~1.5 kW), then
+    transferred to charging at 4 kW.  For the first half hour of the charge
+    the chord's oldest endpoint sat on the downhill leg, so a tank genuinely
+    climbing at 2.9 kW computed dWh of a few hundred over the V and printed
+    `86h -> 21h 29m -> 19h -> 17h` while the cold-start meters said the true
+    `5h 54m` (owner screenshot 21:45).  A chord may only measure a rise, so
+    when the window holds a real fall (> ABSORPTION_DROP_TOL_WH - quantised
+    +/-1% jitter and pack-blip noise stay under that), the oldest endpoint
+    clamps forward to the trough: the slope of the RISE, never the net
+    across the V.  A pure-downhill window still returns None (the trough IS
+    the newest point), keeping the meters/'Measuring' fallbacks unchanged.
     """
     pts = [(ts, wh) for ts, wh in samples
            if isinstance(wh, (int, float)) and not isinstance(wh, bool)]
@@ -1281,10 +1295,14 @@ def absorption_chord_w(samples) -> float | None:
     pts = [p for p in pts if 0 <= newest_ts - p[0] <= ABSORPTION_MAX_SPAN_S]
     if len(pts) < 2:
         return None
-    span = pts[-1][0] - pts[0][0]
+    oldest = pts[0]
+    trough_i = min(range(len(pts)), key=lambda i: pts[i][1])
+    if trough_i < len(pts) - 1 and pts[0][1] - pts[trough_i][1] > ABSORPTION_DROP_TOL_WH:
+        oldest = pts[trough_i]
+    span = pts[-1][0] - oldest[0]
     if span < ABSORPTION_CHORD_MIN_SPAN_S:
         return None
-    dwh = pts[-1][1] - pts[0][1]
+    dwh = pts[-1][1] - oldest[1]
     if dwh < -ABSORPTION_DROP_TOL_WH:
         # The tank never loses this much in 30 min; the counter jumped (pack
         # set genuinely changed, or samples were inherited across a reload
