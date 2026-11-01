@@ -8,6 +8,26 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.22 - 2026-11-01 (field report: ETA wrong for 30 min after every transfer)
+
+* **Chord trough clamp (time-to-full).**  Owner screenshot 2026-10-31
+  21:45 CDT: `21h 29m` while ~4 kW measurably flowed into a 13% rack and
+  the true answer was `5h 54m`.  The Wh chord's 30-minute window spans
+  regime changes it knows nothing about: the rack discharged for 70 min
+  (stored-Wh tank FALLING ~1.5 kW), then transferred to charging at 4 kW.
+  For the chord's first half hour the oldest endpoint sat on the downhill
+  leg, so a tank genuinely climbing at 2.9 kW produced a few hundred Wh
+  across the V - a fake ~750 W rate, printing `86h 42m -> 21h 29m ->
+  19h -> 17h` and crawling back only as the stale samples aged out of the
+  window (~03:00 UTC: exact snap to `5h 54m`, recorder-verified).
+  Now when the window holds a real fall (> `ABSORPTION_DROP_TOL_WH`, so
+  quantiser jitter and sub-tolerance pack blips keep the old path), the
+  oldest endpoint clamps forward to the trough: the chord integrates the
+  RISE only, never the net across the V.  A pure-downhill window still
+  returns None, leaving the meters / `Measuring` fallbacks untouched.
+  7 regression tests including the field replay and a pin proving the
+  pre-fix math fails it.
+
 ## 1.4.21 - 2026-10-25 (owner field reports: deep-bottom ETA lie + cold-start blind spot)
 
 Two related time-to-full fixes, both born from owner field traces.
