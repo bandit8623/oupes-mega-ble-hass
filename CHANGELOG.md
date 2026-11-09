@@ -8,6 +8,46 @@ This fork tracks
 [`acalcutt/oupes-mega-ble-hass`](https://github.com/acalcutt/oupes-mega-ble-hass)
 (MIT) and keeps its integration domain, so releases are drop-in upgrades.
 
+## 1.4.23 - 2026-11-08 (owner field data 2026-10-29 to 2026-11-08)
+
+* **State-of-charge plausibility guard.**  Combined Battery Reserve published
+  `226,575,051 %` once every day or two, and every tap-through graph of it
+  auto-scaled to the garbage and went unreadable.  The recorder's raw history
+  holds the culprits from 2026-10-29 through 2026-11-08: `226,575,051 %`,
+  `159,418,385 %`, `88,162,978 %` and four separate `134,300,3xx %` samples -
+  one poisoned sample per affected hour, normal value on the next poll.  That is
+  a 4-byte field read misaligned or truncated, not a battery that can exist.
+  `protocol.pack_soc_samples` now passes every SoC candidate through
+  `soc_is_plausible` (an int, 0-100) before any aggregate averages it, and
+  `battery_reserve` holds the last plausible reading when a whole update is
+  junk.  The entity publishes `soc_rejected_total` and a `guard` string, because
+  a line held flat by a guard and a genuinely flat battery look identical from
+  the graph.  Dropped, NOT clamped, and that is the load-bearing part:
+  `stored_energy_wh` used to `max(0, min(100, soc))`, which laundered a corrupt
+  `137 %` into a full 4,608 Wh pack - the Wh tank jumped, fell back, and every
+  runtime / time-to-full built on that difference lied.  Raw per-pack mirror
+  entities still show exactly what the station sent, as always; only aggregates
+  are guarded.  New `tests/test_soc_plausibility_guard.py` pins both wrong
+  behaviours the fork previously had (averaging garbage in, clamping it), and
+  the `test_stored_energy_runtime.py` pin that demanded the clamp is re-anchored
+  to the new semantics as `test_out_of_range_soc_dropped_not_clamped`.
+
+* **New integration entity: `Inverter Self-Use`.**  The subtraction
+  `AC Output + Inverter` minus `AC Output` standing on its own in watts - what
+  the inverter burns making the outlets work - on the device page, under the
+  same attr-1 gate as `AC Output + Inverter`: outlets switched off or ECO-asleep
+  answers 0 W, not the idle constant.  Guardian-series only
+  (`_WP_ONLY_SENSOR_KEYS`), on purpose: the loss curve is guardian-measured - 9
+  battery-only discharge nights off the owner's 6000 W unit, median 139 W, 86.2 %
+  battery-to-outlet, shipped curve inside +/-10 W across that unit's usual
+  665-1405 W band - and an absolute watt curve does not port to a smaller
+  station, so a Mega or D5 waits for a per-series curve rather than inherit a
+  Guardian number.  It carries a `source` attribute saying it is modelled from
+  the loss curve and not metered; there is no wattmeter on the logic supply and
+  the number must never read like there is one.  Owner-local template sensor on
+  2026-11-07, shipped here as an integration entity so it lands on the device
+  page for everyone and not only for one dashboard.
+
 ## 1.4.22 - 2026-11-01 (owner-math ETA: usage + total input, no windows)
 
 * **Owner-math primary (time-to-full).**  Owner directive 2026-11-01,

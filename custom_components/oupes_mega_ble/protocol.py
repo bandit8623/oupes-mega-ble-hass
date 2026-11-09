@@ -789,6 +789,64 @@ def parse_packet_sequence(
     )
 
 
+# -- State-of-charge plausibility guard ---------------------------------------
+# Field case (owner's Guardian 6000 V2, 2026-10-29 through 2026-11-08): once
+# every one or two days a single BLE frame decodes to an IMPOSSIBLE SoC. Raw
+# recorder history caught 226,575,051 %, 159,418,385 %, 88,162,978 % and four
+# separate 134,300,3xx % samples - a 4-byte field read misaligned or
+# truncated, one poisoned sample per affected hour, normal value on the next
+# poll. Nothing drives those numbers, but they auto-scaled every tap-through
+# graph of Combined Battery Reserve into an unreadable mess.
+#
+# Rejected, NOT clamped. stored_energy_wh used to clamp with max(0, min(100,
+# soc)), which laundered a corrupt frame into a full 4,608 Wh pack: the Wh
+# tank jumped, then fell back, and every runtime/ETA built on the difference
+# lied. A value that cannot be true carries no information, so it is dropped
+# exactly like a slot that did not answer, and the aggregate says nothing
+# rather than something false. Raw per-pack entities still show what the
+# firmware sent (their own contract); only aggregates are guarded.
+SOC_PLAUSIBLE_MIN = 0
+SOC_PLAUSIBLE_MAX = 100
+
+
+def soc_is_plausible(value: object) -> bool:
+    """True when a decoded state-of-charge could describe a real battery."""
+    return (
+        isinstance(value, int)
+        and not isinstance(value, bool)
+        and SOC_PLAUSIBLE_MIN <= value <= SOC_PLAUSIBLE_MAX
+    )
+
+
+def pack_soc_samples(
+    attrs: dict[int, int],
+    ext_batteries: dict[int, dict[int, int]] | None,
+) -> tuple[list[int], int]:
+    """(plausible SoC values, count of implausible ones dropped).
+
+    Same inclusion rules average_pack_soc has always had - main dpid 3 plus
+    each reporting slot's dpid 79, silent/empty slots skipped, a real 0 %
+    counts - with the plausibility guard applied to every candidate. The
+    second element is how many candidates the guard ate, which is what the
+    coordinator counts and the sensor publishes.
+    """
+    vals: list[int] = []
+    dropped = 0
+    candidates: list[object] = []
+    main = (attrs or {}).get(3)
+    candidates.append(main)
+    for slot_data in (ext_batteries or {}).values():
+        candidates.append(slot_data.get(79) if slot_data else None)
+    for cand in candidates:
+        if cand is None:
+            continue                     # absent: absence, not corruption
+        if soc_is_plausible(cand):
+            vals.append(cand)
+        else:
+            dropped += 1
+    return vals, dropped
+
+
 def average_pack_soc(
     attrs: dict[int, int],
     ext_batteries: dict[int, dict[int, int]] | None,
@@ -812,15 +870,13 @@ def average_pack_soc(
     The coordinator rebuilds ext_batteries from scratch every update, so a
     pack switched off vanishes from the average on the next poll without any
     extra staleness logic here.
+
+    Since v1.4.23 an impossible SoC (see SOC_PLAUSIBLE_MAX) is dropped before
+    the average and can therefore no longer move it. When every candidate was
+    impossible this returns None, and the sensor holds its last good value
+    instead of publishing a fabrication.
     """
-    vals: list[int] = []
-    main = attrs.get(3)
-    if isinstance(main, int):
-        vals.append(main)
-    for slot_data in (ext_batteries or {}).values():
-        soc = slot_data.get(79) if slot_data else None
-        if isinstance(soc, int):
-            vals.append(soc)
+    vals, _dropped = pack_soc_samples(attrs, ext_batteries)
     if not vals:
         return None
     return round(sum(vals) / len(vals))
@@ -923,22 +979,21 @@ def stored_energy_wh(
     reported 0% counts as real data, and None means nothing reported at all.
     Because the same rules feed Combined Battery Reserve, the two sensors can
     never disagree about which batteries were counted.
+
+    A real 0% contributes 0 Wh and is still "seen"; an impossible SoC (226 million
+    percent and friends) contributes nothing at all.
     """
     wh_unit = WH_PER_BATTERY_UNIT.get(series)
     if wh_unit is None:
         return None
-    total = 0.0
-    seen = False
-    main = attrs.get(3)
-    if isinstance(main, int):
-        total += wh_unit * max(0, min(100, main)) / 100
-        seen = True
-    for _slot, slot_data in (ext_batteries or {}).items():
-        soc = (slot_data or {}).get(79)
-        if isinstance(soc, int):
-            total += wh_unit * max(0, min(100, soc)) / 100
-            seen = True
-    return round(total, 1) if seen else None
+    # v1.4.23: was `max(0, min(100, soc))`, which turned one corrupt frame
+    # into a whole 4,608 Wh pack counted as full. Impossible SoC is now
+    # dropped exactly as average_pack_soc drops it, so percent and watt-hours
+    # still agree about what counted - they just both refuse the lie.
+    vals, _dropped = pack_soc_samples(attrs, ext_batteries)
+    if not vals:
+        return None
+    return round(wh_unit * sum(vals) / 100, 1)
 
 
 def runtime_estimate_minutes(energy_wh: float | None, net_drain_w: object) -> float | None:

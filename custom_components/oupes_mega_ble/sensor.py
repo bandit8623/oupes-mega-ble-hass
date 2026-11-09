@@ -210,6 +210,24 @@ SENSOR_DESCRIPTIONS: tuple[OUPESSensorDescription, ...] = (
         icon="mdi:flash",
     ),
     OUPESSensorDescription(
+        # The subtraction on its own: what the inverter burns making the AC
+        # outlets work, i.e. AC Output + Inverter minus AC Output Power. Same
+        # measured loss curve (protocol.inverter_overhead_w), same ECO gate.
+        # MODELLED, NOT METERED - there is no wattmeter on the logic supply.
+        # Guardian-only on purpose: the curve is guardian-measured (owner's
+        # 6000 W unit, 9 battery-only discharge nights) and an absolute watt
+        # curve is not portable to a smaller unit. AC Output + Inverter has
+        # shipped to every series since v1.4.16; this one waits for a
+        # per-series curve rather than propagate a Guardian number.
+        key="ac_inverter_self_use",
+        attr=5,
+        name="Inverter Self-Use",
+        device_class=SensorDeviceClass.POWER,
+        state_class=SensorStateClass.MEASUREMENT,
+        native_unit_of_measurement=UnitOfPower.WATT,
+        icon="mdi:lightning-bolt",
+    ),
+    OUPESSensorDescription(
         key="dc_12v_output",
         attr=6,
         name="DC 12V Output",
@@ -479,6 +497,10 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
         self._attr_native_unit_of_measurement = description.native_unit_of_measurement
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
         self._attr_device_info = _device_info(coordinator)
+        # Last plausible pooled SoC, held across a poll whose SoC field decoded
+        # to something impossible (see protocol.SOC_PLAUSIBLE_MAX). Only used
+        # by battery_reserve.
+        self._soc_hold: int | None = None
 
     @property
     def available(self) -> bool:
@@ -506,15 +528,45 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
         return True
 
     @property
+    def extra_state_attributes(self) -> dict[str, object] | None:
+        """Provenance and guard counters on the two entities that need them.
+
+        Deliberately on the entity, not in the name: a number that is modelled
+        must say so where someone clicks it, and a line that is being held
+        flat by a guard must be tellable from a line that is genuinely flat.
+        """
+        if self.entity_description.key == "ac_inverter_self_use":
+            return {
+                "source": "modelled from the measured inverter loss curve, "
+                          "not metered (protocol.inverter_overhead_w)",
+            }
+        if self.entity_description.key == "battery_reserve":
+            return {
+                "soc_rejected_total": getattr(
+                    self.coordinator, "soc_rejected_total", 0
+                ),
+                "guard": "SoC outside 0-100% is dropped; last good value held",
+            }
+        return None
+
+    @property
     def native_value(self) -> float | str | None:
         if self.coordinator.data is None:
             return None
         desc = self.entity_description
         if desc.key == "battery_reserve":
-            return average_pack_soc(
+            soc = average_pack_soc(
                 self.coordinator.data["attrs"],
                 self.coordinator.effective_ext_batteries(),
             )
+            if soc is None:
+                # Every SoC candidate in this update was impossible (the guard
+                # in protocol.pack_soc_samples ate them all). Hold the last
+                # good reading rather than publish a fabrication; the counter
+                # below is what says it happened.
+                return self._soc_hold
+            self._soc_hold = soc
+            return soc
         if desc.key == "stored_energy_wh":
             return stored_energy_wh(
                 self.coordinator.product_series,
@@ -530,6 +582,15 @@ class OUPESMegaSensor(CoordinatorEntity[OUPESMegaCoordinator], SensorEntity):
             # asleep with no load) the inverter is not burning idle.
             enabled = bool(int(self.coordinator.data["attrs"].get(1, 0) or 0) & OUTPUT_AC_BIT)
             return round(ac + inverter_overhead_w(ac)) if enabled else round(ac)
+        if desc.key == "ac_inverter_self_use":
+            ac = self.coordinator.data["attrs"].get(5)
+            if ac is None:
+                return None
+            # Same gate as AC Output + Inverter: with the outlets switched off
+            # (or an ECO-asleep inverter) nothing is being burned, so the
+            # honest answer is 0 W and not the idle constant.
+            enabled = bool(int(self.coordinator.data["attrs"].get(1, 0) or 0) & OUTPUT_AC_BIT)
+            return round(inverter_overhead_w(float(ac))) if enabled else 0
         if desc.key == "runtime_estimate":
             energy = stored_energy_wh(
                 self.coordinator.product_series,
@@ -785,6 +846,11 @@ _WP_ONLY_SENSOR_KEYS = frozenset(
         "runtime_estimate",
         "time_to_full",
         "battery_status",
+        # the loss curve behind Inverter Self-Use was measured on a guardian
+        # (owner's Guardian 6000 V2 + 9 battery-only nights). Absolute watts
+        # do not scale to a 2.5 kWh unit, so a Mega gets no number at all
+        # until there is a curve per series.
+        "ac_inverter_self_use",
     }
 )
 

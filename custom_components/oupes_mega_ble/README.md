@@ -291,6 +291,8 @@ retrieved key is saved.
 |--------|------|------|-------|
 | Battery Charge | 3 | % | State of charge |
 | AC Output Power | 4 | W | Load on AC outlets |
+| AC Output + Inverter | 5 | W | The AC outlets **plus** the inverter's own appetite: dpid 5 with the measured loss curve added back. Gated on the AC-output bit in dpid 1, so switched-off or ECO-asleep outlets report the raw register — an inverter that is not switching has nothing to burn. On every series since v1.4.16 |
+| Inverter Self-Use | derived from 5 | W | **Guardian / D5 V2 only.** That same loss standing on its own in watts — `AC Output + Inverter` minus `AC Output Power`, from the same curve and the same gate (outlets off ⇒ 0 W). **Modelled, not metered**, and the entity's `source` attribute says so. See the note under this table |
 | DC 12V Output | 6 | W | 12 V cigarette lighter output |
 | USB-C Output | 7 | W | USB-C port output power |
 | USB-A Output | 8 | W | USB-A port output power |
@@ -300,6 +302,7 @@ retrieved key is saved.
 | DC Input 1 Power | 23 (low half) | W | Guardian / D5 V2 only — power on the first DC input. Named **DC XT60 Power 1** on product `95haDY`, where the owner confirmed the sockets; `entity_id` is unchanged either way |
 | DC Input 2 Power | 23 (high half) | W | Guardian / D5 V2 only — power on the second DC input. Named **DC XT60 Power 2** on product `95haDY` |
 | Remaining Runtime | 30 | min | Firmware's own estimate. **Demoted to the Diagnostic section** — it jumps to nonsense (e.g. 5940 min) near full charge or idle load; prefer Runtime Left below. Still enabled, still logging history |
+| Combined Battery Reserve | 3 + 79 | % | Mean state of charge of the main unit and every pack reporting this poll. Since v1.4.23 an impossible sample is **dropped before the average, never clamped** — see the SoC note under this table; the entity carries `soc_rejected_total` (drops since Home Assistant started) |
 | Battery Energy Stored | derived | Wh | Guardian family only: Σ (SoC × 4,608 Wh) over the main unit **and every expansion pack reporting this poll** — add a G5 and the ceiling rises automatically; nothing reported means unknown, never a fake number |
 | Runtime Left | derived | min | Battery Energy Stored ÷ **measured total load** (AC + 12 V + USB-C + USB-A — dpid 4 alone is AC-only, CSV-proven). Refuses instead of lying: idle load under 5 W and horizons past a week both report unknown |
 | Time To Full Charge | derived | min | Energy deficit ÷ **net** charge input (Total Input Power dpid 21 − live load, so passthrough watts that never reach the battery don't flatter the answer). Refuses when full, idle, discharging, or beyond a week; linear, no efficiency modelled |
@@ -309,6 +312,30 @@ retrieved key is saved.
 | External Battery 1–N Charge | 79 | % | Direct battery percentage (raw value = %) |
 | External Battery 1–N Temperature | 80 | °F | Per module temperature (÷10; e.g. 878 → 87.8 °F) |
 | Connected Expansion Batteries | 51 | — | Count of connected expansion battery packs (0–2 on Mega 1). On models that do not answer attr 51 unless queried, this is derived from the slots reporting per-pack telemetry, so it still follows packs being added or removed |
+
+> **`Inverter Self-Use` is modelled, not metered.** Nothing measures the
+> inverter's logic-supply draw, so the watts come from a loss curve measured on
+> the owner's Guardian 6000 V2 across nine battery-only discharge nights: 57 W
+> flat up to 65 W of load (the idle floor), 120 W at 500 W, 225 W at 2100 W,
+> 450 W at 4000 W, and 1059 W at the 6000 W pin — the owner's measured 85 %
+> efficiency point, because losses roll off past the sweet spot and extending
+> the line straight would lie. Piecewise linear between anchors, **clamped
+> outside them**: an unmeasured region never invents slope. Read it as a loss
+> trend rather than a metered circuit. It is deliberately absent on Mega and the
+> other series — absolute watts do not scale to a smaller unit, so those get no
+> number at all until a curve is measured per series. `AC Output + Inverter` is
+> the half of the pair that ships everywhere.
+>
+> **Impossible state of charge is dropped, not clamped.** Corrupt frames have
+> been recorded writing values like 134,300,300 into the SoC registers. Clamping
+> laundered those into a plausible-but-false average, so since v1.4.23 any
+> sample outside 0–100 % is removed *before* the mean. `soc_rejected_total` and
+> a `guard` line sit on Combined Battery Reserve so a curve held flat by the
+> guard can be told apart from one that is genuinely flat, and when every
+> candidate for a poll is impossible the aggregate reports unknown while the
+> sensor keeps its last good value instead of publishing a fabrication. The same
+> rule protects everything else built on SoC: Battery Energy Stored, Runtime
+> Left and Time To Full Charge.
 
 > **Battery modules:** The Mega 1 has two **internal** battery modules (slots
 > 1 and 2). External **OUPES B2 Expansion Batteries** (LiFePO4, ~2 kWh each)

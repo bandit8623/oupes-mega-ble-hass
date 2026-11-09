@@ -60,9 +60,22 @@ def test_unknown_series_refuses_to_invent_capacity():
     assert stored_energy_wh("mega", {3: 100}, None) is None
 
 
-def test_out_of_range_soc_clamped():
-    assert stored_energy_wh("guardian", {3: 137}, None) == UNIT   # clamp to 100%
-    assert stored_energy_wh("guardian", {3: -5}, None) == 0.0     # clamp to 0%
+def test_out_of_range_soc_dropped_not_clamped():
+    """v1.4.23 changed this pin deliberately (see test_soc_plausibility_guard).
+
+    It used to read `assert stored_energy_wh("guardian", {3: 137}, None) == UNIT`
+    - clamp an impossible 137% to a full pack. The owner's unit really does
+    emit values like 134,300,363% once every day or two, so that clamp paid out
+    a whole 4,608 Wh pack on every corrupt frame: the Wh tank jumped, fell back
+    and the runtime/ETA built on the difference was wrong. An impossible value
+    is now dropped, same as a pack that did not answer.
+    """
+    assert stored_energy_wh("guardian", {3: 137}, None) is None
+    assert stored_energy_wh("guardian", {3: -5}, None) is None
+    # Real data at the edges is untouched, so nothing is hidden about a genuinely
+    # empty or genuinely full rack.
+    assert stored_energy_wh("guardian", {3: 0}, None) == 0.0
+    assert stored_energy_wh("guardian", {3: 100}, None) == UNIT
 
 
 def test_pack_count_changes_track_hardware():

@@ -41,8 +41,11 @@ from .protocol import (
     KEEPALIVE_PKT,
     NOTIFY_CHAR_UUID,
     PACK_SOC_HOLD_S,
+    SOC_PLAUSIBLE_MAX,
+    SOC_PLAUSIBLE_MIN,
     WRITE_CHAR_UUID,
     merge_held_pack_socs,
+    pack_soc_samples,
     parse_ble_packet,
     parse_packet_sequence,
     product_uses_packed_power,
@@ -146,6 +149,11 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
         # (see protocol.merge_held_pack_socs; field case -8.9 kWh single-sample
         # dropout, 2026-10-24 charge soak).
         self._pack_soc_hold: dict[int, tuple[float, int]] = {}
+        # How many SoC values the plausibility guard has refused since HA
+        # started (see protocol.SOC_PLAUSIBLE_MAX). Published as an attribute
+        # on Combined Battery Reserve: a line held flat by the guard and a
+        # genuinely flat battery look identical otherwise.
+        self.soc_rejected_total: int = 0
         # Inherit the previous coordinator's history for this address so a
         # reload does not restart the 5-minute blind window (see _SAMPLE_MEMORY).
         _mem = _SAMPLE_MEMORY.get(str(address))
@@ -359,6 +367,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
                 self.last_successful_poll = datetime.now()
                 self._record_soc(data)
                 self._record_energy(data)
+                self._count_soc_rejections(data)
                 return data
 
             _LOGGER.debug(
@@ -430,6 +439,26 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             if self.soc_samples and now - self.soc_samples[-1][0] < 30.0:
                 return
             self.soc_samples.append((now, soc))
+
+    def _count_soc_rejections(self, data: OUPESData) -> None:
+        """Count SoC values this update contained that the guard refuses.
+
+        Reads the raw poll set, not effective_ext_batteries(): the hold logic
+        there is for aggregates, and calling it here would touch its hold
+        timestamps on every poll. Raw mirrors keep showing what the firmware
+        sent; only this counter and the aggregates know it was nonsense.
+        """
+        _vals, dropped = pack_soc_samples(
+            data.get("attrs") or {}, data.get("ext_batteries") or {}
+        )
+        if not dropped:
+            return
+        self.soc_rejected_total += dropped
+        _LOGGER.warning(
+            "%s: dropped %d impossible SoC value(s) (only %d-%d%% accepted); "
+            "aggregate sensors hold their last good reading",
+            self.address, dropped, SOC_PLAUSIBLE_MIN, SOC_PLAUSIBLE_MAX,
+        )
 
     def effective_ext_batteries(
         self, data: OUPESData | None = None
@@ -548,6 +577,7 @@ class OUPESMegaCoordinator(DataUpdateCoordinator):
             self._live_data = data
             self._record_soc(data)
             self._record_energy(data)
+            self._count_soc_rejections(data)
             self.last_successful_poll = datetime.now()
             c_last_push[0] = _time.monotonic()
             c_push_pending[0] = False
